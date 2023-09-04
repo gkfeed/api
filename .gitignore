@@ -1,0 +1,11 @@
+**/*.pyc
+sources
+**/__pycache__
+.venv
+sources.toml
+.env
+cache_directory/
+**/*.sqlite*
+**/.mypy_cache
+**/.pytest_cache
+**/**/.ruff_cache/

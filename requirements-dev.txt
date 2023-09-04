@@ -1,0 +1,73 @@
+-i https://pypi.org/simple
+autopep8==2.0.4
+blinker==1.6.2 ; python_version >= '3.7'
+brotli==1.0.9
+certifi==2023.7.22 ; python_version >= '3.6'
+cfgv==3.4.0 ; python_version >= '3.8'
+charset-normalizer==3.2.0 ; python_full_version >= '3.7.0'
+click==8.1.7 ; python_version >= '3.7'
+configargparse==1.7 ; python_version >= '3.5'
+distlib==0.3.7
+filelock==3.12.3 ; python_version >= '3.8'
+flake8==6.1.0
+flask==2.3.3 ; python_version >= '3.8'
+flask-basicauth==0.2.0
+flask-cors==4.0.0
+gevent==23.9.0.post1 ; python_version >= '3.8'
+geventhttpclient==2.0.10
+greenlet==2.0.2 ; platform_python_implementation == 'CPython' and python_version < '3.12'
+identify==2.5.27 ; python_version >= '3.8'
+idna==3.4 ; python_version >= '3.5'
+iniconfig==2.0.0 ; python_version >= '3.7'
+itsdangerous==2.1.2 ; python_version >= '3.7'
+jinja2==3.1.2 ; python_version >= '3.7'
+locust==2.16.1
+markupsafe==2.1.3 ; python_version >= '3.7'
+mccabe==0.7.0 ; python_version >= '3.6'
+msgpack==1.0.5
+nodeenv==1.8.0 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6'
+packaging==23.1 ; python_version >= '3.7'
+platformdirs==3.10.0 ; python_version >= '3.7'
+pluggy==1.3.0 ; python_version >= '3.8'
+pre-commit==3.4.0
+psutil==5.9.5 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'
+pycodestyle==2.11.0 ; python_version >= '3.8'
+pyflakes==3.1.0 ; python_version >= '3.8'
+pytest==7.4.1
+pytest-tornasync==0.6.0.post2
+pyyaml==6.0.1
+pyzmq==25.1.1 ; python_version >= '3.6'
+requests==2.31.0 ; python_version >= '3.7'
+roundrobin==0.0.4
+ruff==0.0.287
+setuptools==68.1.2 ; python_version >= '3.8'
+six==1.16.0 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2'
+tornado==6.3.3 ; python_version >= '3.8'
+typing-extensions==4.7.1 ; python_version >= '3.7'
+urllib3==2.0.4 ; python_version >= '3.7'
+virtualenv==20.24.4 ; python_version >= '3.7'
+werkzeug==2.3.7 ; python_version >= '3.8'
+zope.event==5.0 ; python_version >= '3.7'
+zope.interface==6.0 ; python_version >= '3.7'
+aiosqlite==0.17.0 ; python_version >= '3.6'
+annotated-types==0.5.0 ; python_version >= '3.7'
+anyio==3.7.1 ; python_version >= '3.7'
+fastapi==0.103.1
+feedgen==0.9.0
+h11==0.14.0 ; python_version >= '3.7'
+httptools==0.6.0
+iso8601==1.1.0 ; python_full_version >= '3.6.2' and python_version < '4.0'
+lxml==4.9.3 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4'
+pydantic==2.3.0 ; python_version >= '3.7'
+pydantic-core==2.6.3 ; python_version >= '3.7'
+pypika-tortoise==0.1.6 ; python_version >= '3.7' and python_version < '4.0'
+python-dateutil==2.8.2 ; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2'
+python-dotenv==1.0.0
+pytz==2023.3
+sniffio==1.3.0 ; python_version >= '3.7'
+starlette==0.27.0 ; python_version >= '3.7'
+tortoise-orm==0.20.0
+uvicorn[standard]==0.23.2
+uvloop==0.17.0
+watchfiles==0.20.0
+websockets==11.0.3

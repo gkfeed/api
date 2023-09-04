@@ -1,0 +1,8 @@
+.venv
+cache_directory
+.idea
+.vscode
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache/
+
