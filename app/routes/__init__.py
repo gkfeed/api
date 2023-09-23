@@ -7,6 +7,6 @@ from .delete import delete_feed
 
 def setup(app: FastAPI):
     app.add_api_route('/api/v1/feed', get_rss_feed)
-    app.add_api_route('/api/v1/add', add_feed)
+    app.add_api_route('/api/v1/add', add_feed, methods=['POST'])
     app.add_api_route('/api/v1/list', get_subscriptions_list)
     app.add_api_route('/api/v1/delete', delete_feed)
