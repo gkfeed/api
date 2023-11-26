@@ -27,7 +27,7 @@ class FeedFactory:
 
     @classmethod
     def _recognise_feed_url(cls, input_url: str, feed_type: str) -> str:
-        if feed_type == "yt":
+        if feed_type in ("yt", "spoti"):
             return input_url
         if feed_type == "tiktok":
             return "https://www.tiktok.com/@" + input_url.split("@")[1]
@@ -39,4 +39,6 @@ class FeedFactory:
             return "yt"
         if url.startswith("https://tok.adminforge.de/@"):
             return "tiktok"
+        if url.startswith("https://open.spotify.com/artist/"):
+            return "spoti"
         raise ValueError
