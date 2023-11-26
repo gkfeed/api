@@ -23,6 +23,8 @@ class FeedFactory:
     def _recognise_feed_title(cls, input_url: str, feed_type: str) -> str:
         if feed_type in ("yt", "tiktok"):
             return input_url.split("@")[1].split("/")[0]
+        if feed_type == "spoti":
+            return input_url.split("/")[-1]
         raise ValueError
 
     @classmethod
