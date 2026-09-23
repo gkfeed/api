@@ -3,20 +3,18 @@ package auth
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
-
-	"gkfeed/api/internal/config"
-	"gkfeed/api/internal/models"
 )
 
-func Authenticate(cfg config.Config) func(http.HandlerFunc) http.HandlerFunc {
+func Authenticate(sessions *SessionStore) func(http.HandlerFunc) http.HandlerFunc {
 	return func(handler http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if user, ok := tryJWT(r, cfg); ok {
-				log.Printf("auth: authenticated via JWT user=%s id=%d", user.Name, user.ID)
-				handler(w, r.WithContext(WithUser(r.Context(), user)))
-				return
+			if sessions != nil {
+				if session, ok := sessions.Get(bearerToken(r)); ok {
+					log.Printf("auth: authenticated via access token user=%s id=%d", session.User.Name, session.User.ID)
+					handler(w, r.WithContext(WithUser(r.Context(), session.User)))
+					return
+				}
 			}
 
 			username, password, ok := r.BasicAuth()
@@ -35,57 +33,33 @@ func Authenticate(cfg config.Config) func(http.HandlerFunc) http.HandlerFunc {
 				log.Printf("auth: basic auth failed (wrong password) for user=%q", username)
 			}
 
-			if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			if r.Header.Get("Authorization") != "" {
 				log.Printf("auth: rejecting request, Authorization header provided, parsed basic=%v", ok)
 			} else {
 				log.Printf("auth: rejecting request, no Authorization header")
 			}
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			if sessions != nil {
+				w.Header().Add("WWW-Authenticate", "Bearer")
+			}
+			w.Header().Add("WWW-Authenticate", `Basic realm="Restricted"`)
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		}
 	}
 }
 
-func JWTAuth(cfg config.Config) func(http.HandlerFunc) http.HandlerFunc {
-	return func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			user, ok := tryJWT(r, cfg)
-			if !ok {
-				http.Error(w, "No authentication provided", http.StatusUnauthorized)
-				return
-			}
-			handler(w, r.WithContext(WithUser(r.Context(), user)))
-		}
-	}
-}
-
-func tryJWT(r *http.Request, cfg config.Config) (models.User, bool) {
-	header := r.Header.Get("Authorization")
-	if header == "" {
-		return models.User{}, false
-	}
-
-	tokenString, ok := parseBearerToken(header)
+func bearerToken(r *http.Request) string {
+	token, ok := parseBearerToken(r.Header.Get("Authorization"))
 	if !ok {
-		return models.User{}, false
+		return ""
 	}
-
-	claims, err := ValidateAccessToken(tokenString, cfg)
-	if err != nil {
-		return models.User{}, false
-	}
-
-	userID, err := strconv.Atoi(claims.Subject)
-	if err != nil {
-		return models.User{}, false
-	}
-
-	return models.User{ID: userID, Name: claims.Name}, true
+	return token
 }
 
 func parseBearerToken(header string) (string, bool) {
-	if !strings.HasPrefix(header, "Bearer ") {
+	scheme, token, ok := strings.Cut(strings.TrimSpace(header), " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
 		return "", false
 	}
-	return strings.TrimPrefix(header, "Bearer "), true
+	token = strings.TrimSpace(token)
+	return token, token != ""
 }

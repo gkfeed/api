@@ -311,4 +311,3 @@ Startup логирует эту статистику без раскрытия �
 - Graceful shutdown закрывает HTTP server и DB pool.
 - Unit, contract, migration и HTTP tests проходят.
 - `go test ./...` и существующие project checks проходят.
-

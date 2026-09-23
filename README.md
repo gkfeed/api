@@ -11,8 +11,7 @@ GKFeed is a small Go HTTP API that stores feed subscriptions and items in Postgr
 
 ## Development
 
-Set `GKFEED_DATABASE_URL` to your PostgreSQL application connection URL and
-`GKFEED_JWT_SECRET` to a random secret of at least 32 bytes.
+Set `GKFEED_DATABASE_URL` to your PostgreSQL application connection URL before starting the API.
 
 Do not deploy this branch as an intermediate SQLite release. Before merge or
 deployment, confirm the infra schema and grants, importer completion, sequence
@@ -31,7 +30,7 @@ used only for local test fixtures.
 make dev
 ```
 
-The API listens on <http://localhost:8086>. Most routes require HTTP Basic authentication using credentials stored in the `users` table. The `hashed_password` column stores PHC-formatted Argon2id hashes; the importer converts legacy plaintext passwords before cutover. A null password is valid for a passwordless user and Basic Auth rejects it with `401 Unauthorized`. Normal password login verifies Argon2id hashes.
+The API listens on <http://localhost:8086>. Password login returns a short-lived opaque access token and a rotating refresh token. Access tokens are sent as `Authorization: Bearer <token>`; Basic authentication remains available for existing v1 clients. The `hashed_password` column stores PHC-formatted Argon2id hashes; the importer converts legacy plaintext passwords before cutover. Null passwords are valid for passwordless users; Basic Auth rejects them.
 
 Run the local quality checks with:
 
@@ -51,12 +50,12 @@ Configuration is read from environment variables at startup:
 | `GKFEED_ADDRESS` | `:8086` | HTTP server listen address |
 | `GKFEED_DATABASE_URL` | none (required) | PostgreSQL application connection URL |
 | `GKFEED_ALLOWED_ORIGINS` | Localhost development origins | Comma-separated CORS origins |
-| `GKFEED_JWT_SECRET` | none (required) | Cryptographically random JWT signing secret of at least 32 bytes |
+| `GKFEED_ACCESS_TTL` | `30m` | Access-token lifetime |
+| `GKFEED_JWT_REFRESH_TTL` | `2160h` | Refresh-token idle lifetime |
 
 ## Docker
 
 ```sh
-export GKFEED_JWT_SECRET="$(openssl rand -base64 32)"
 docker compose up --build -d
 ```
 
@@ -84,6 +83,12 @@ Swagger UI is available at `/api/swagger/index.html`.
 | `GET` | `/api/v1/get_items` | Basic | Return cursor-paginated items |
 | `GET` | `/api/v1/item?id=<id>` | Basic or Bearer | Return the authenticated user's item and its feed |
 | `GET` | `/api/v1/auth/me` | Basic or Bearer | Return the authenticated user |
+| `POST` | `/api/v1/auth/login` | None | Exchange username and password for access and refresh tokens |
+| `POST` | `/api/v1/auth/refresh` | None | Rotate a refresh token and issue a new token pair |
+| `POST` | `/api/v1/auth/logout` | Refresh token | Revoke the refresh-token family |
+| `POST` | `/api/v1/auth/logout-all` | Basic or Bearer | Revoke all sessions for the authenticated user |
+
+Refresh token IDs in the infra-owned `refresh_tokens` table contain only SHA-256 token digests and random family IDs. Consumed tokens remain as expired rows so reuse can be detected. Each refresh rotates the token; reusing an old token revokes the entire token family and its access sessions. Access sessions are held in memory, so restarting the API invalidates access tokens while valid refresh tokens can obtain new ones.
 
 The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing

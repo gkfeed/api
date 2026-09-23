@@ -4,15 +4,57 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"time"
 
 	"gkfeed/api/internal/auth"
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 
 	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/google/uuid"
 )
+
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// @Summary      Login with a password
+// @Description  Exchanges username and password for a short-lived access token and a rotating refresh token.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      loginRequest  true  "Credentials"
+// @Success      200   {object}  tokenResponse
+// @Failure      400
+// @Failure      401
+// @Failure      500
+// @Router       /api/v1/auth/login [post]
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+
+	var req loginRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, "Username and password are required", http.StatusBadRequest)
+		return
+	}
+
+	user, authenticated, err := auth.AuthenticatePassword(req.Username, req.Password)
+	if err != nil {
+		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
+		return
+	}
+	if !authenticated {
+		writeBearerUnauthorized(w)
+		return
+	}
+
+	tokens, err := h.issueTokenPair(user)
+	if err != nil {
+		writeInternalServerError(w, fmt.Errorf("create authentication session: %w", err))
+		return
+	}
+	writeJSON(w, tokens)
+}
 
 // @Summary      Begin passkey login
 // @Description  Starts discoverable WebAuthn login, returns assertion options for the browser.
@@ -32,7 +74,7 @@ func (h *AuthHandler) BeginLogin(w http.ResponseWriter, _ *http.Request) {
 }
 
 // @Summary      Finish passkey login
-// @Description  Completes WebAuthn authentication, returns a JWT access/refresh token pair.
+// @Description  Completes WebAuthn authentication, returns an access/refresh token pair.
 // @Tags         auth
 // @Accept       json
 // @Produce      json
@@ -54,29 +96,17 @@ func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user.ID, user.Name, h.cfg)
+	tokens, err := h.issueTokenPair(user)
 	if err != nil {
-		writeInternalServerError(w, fmt.Errorf("generate access token: %w", err))
-		return
-	}
-
-	refreshToken := models.RefreshToken{
-		ID:        uuid.NewString(),
-		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(h.cfg.RefreshTokenTTL),
-	}
-	if err := db.StoreRefreshToken(refreshToken); err != nil {
-		writeInternalServerError(w, fmt.Errorf("store refresh token: %w", err))
+		writeInternalServerError(w, fmt.Errorf("create authentication session: %w", err))
 		return
 	}
 
 	writeJSON(w, struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
+		tokenResponse
 		CredentialID string `json:"credential_id"`
 	}{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken.ID,
-		CredentialID: base64.RawURLEncoding.EncodeToString(credential.ID),
+		tokenResponse: tokens,
+		CredentialID:  base64.RawURLEncoding.EncodeToString(credential.ID),
 	})
 }

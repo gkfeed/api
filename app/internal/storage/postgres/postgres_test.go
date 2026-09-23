@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"gkfeed/api/internal/auth"
 	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 	"gkfeed/api/internal/passwordhash"
 	"gkfeed/api/internal/storage/repositorytest"
 )
@@ -129,15 +128,16 @@ func TestPostgresAuthContract(t *testing.T) {
 	if err != nil || len(infos) != 1 {
 		t.Fatalf("credential infos = %#v, %v", infos, err)
 	}
-	token := models.RefreshToken{ID: "token", UserID: 1, ExpiresAt: time.Now().Add(time.Hour)}
-	if err := db.StoreRefreshToken(token); err != nil {
+	tokenHash := []byte("test-token-digest")
+	family := []byte("test-family")
+	if err := db.CreateAuthRefreshToken(1, tokenHash, family, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	stored, err := db.GetRefreshToken(token.ID)
-	if err != nil || stored.UserID != 1 {
-		t.Fatalf("token = %#v, %v", stored, err)
+	rotation, err := db.RotateAuthRefreshToken(tokenHash, []byte("next-token-digest"), time.Now(), time.Now().Add(time.Hour))
+	if err != nil || rotation.User.ID != 1 {
+		t.Fatalf("rotation = %#v, %v", rotation, err)
 	}
-	if err := db.DeleteRefreshToken(token.ID); err != nil {
+	if _, err := db.RevokeAuthRefreshToken([]byte("next-token-digest"), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if ok, err := db.DeleteWebAuthnCredential(credential.ID, 1); err != nil || !ok {

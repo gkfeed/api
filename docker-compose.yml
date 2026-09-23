@@ -8,5 +8,4 @@ services:
     environment:
       GKFEED_ADDRESS: ":8086"
       GKFEED_DATABASE_URL: "${GKFEED_DATABASE_URL:?set GKFEED_DATABASE_URL to the PostgreSQL application connection URL}"
-      GKFEED_JWT_SECRET: "${GKFEED_JWT_SECRET:?set GKFEED_JWT_SECRET to a cryptographically random value of at least 32 bytes}"
     restart: always

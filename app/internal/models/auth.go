@@ -19,10 +19,3 @@ type WebAuthnCredential struct {
 	CreatedAt       time.Time
 	LastUsedAt      *time.Time
 }
-
-type RefreshToken struct {
-	ID        string
-	UserID    int
-	ExpiresAt time.Time
-	CreatedAt time.Time
-}
