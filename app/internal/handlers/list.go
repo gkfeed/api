@@ -14,6 +14,7 @@ import (
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/list [get]
+// @Router       /api/v2/feeds [get]
 func (h *LibraryHandler) HandleListOfFeeds(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {

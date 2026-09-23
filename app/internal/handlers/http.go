@@ -19,6 +19,7 @@ const maxRequestBodySize = 1 << 20
 
 type LibraryService interface {
 	ListFeeds(context.Context, int) ([]library.Feed, error)
+	GetFeed(context.Context, int, int) (library.Feed, error)
 	AddFeed(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error)
 	DeleteFeed(context.Context, int, int) error
 	GetItem(context.Context, int, int) (library.ItemDetails, error)

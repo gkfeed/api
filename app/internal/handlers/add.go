@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"gkfeed/api/internal/library"
 )
@@ -20,6 +21,27 @@ import (
 // @Failure      500
 // @Router       /api/v1/add [post]
 func (h *LibraryHandler) HandleAddFeed(w http.ResponseWriter, r *http.Request) {
+	h.addFeed(w, r, false)
+}
+
+// @Summary      Create feed
+// @Description  Creates a feed with explicit title, type, and URL. Repeated creation returns the existing feed.
+// @Tags         feeds
+// @Accept       json
+// @Produce      json
+// @Param        feed body createFeedDTO true "Feed to create (title, type, url required)"
+// @Security     BasicAuth
+// @Security     BearerAuth
+// @Success      200 {object} feedMutationResponse
+// @Failure      400
+// @Failure      401
+// @Failure      500
+// @Router       /api/v2/feeds [post]
+func (h *LibraryHandler) HandleCreateFeed(w http.ResponseWriter, r *http.Request) {
+	h.addFeed(w, r, true)
+}
+
+func (h *LibraryHandler) addFeed(w http.ResponseWriter, r *http.Request, requireFields bool) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
@@ -27,6 +49,10 @@ func (h *LibraryHandler) HandleAddFeed(w http.ResponseWriter, r *http.Request) {
 
 	var feedInput createFeedDTO
 	if !decodeJSON(w, r, &feedInput) {
+		return
+	}
+	if requireFields && (strings.TrimSpace(feedInput.Title) == "" || strings.TrimSpace(feedInput.Type) == "" || strings.TrimSpace(feedInput.URL) == "") {
+		http.Error(w, "title, type, and url are required", http.StatusBadRequest)
 		return
 	}
 

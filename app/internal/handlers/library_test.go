@@ -11,12 +11,19 @@ type fakeLibraryService struct {
 	deleteFeed func(context.Context, int, int) error
 	deleteItem func(context.Context, int, int) error
 	listFeeds  []library.Feed
+	getFeed    func(context.Context, int, int) (library.Feed, error)
 	listItems  []library.Item
 	page       library.Page
 }
 
 func (f *fakeLibraryService) ListFeeds(context.Context, int) ([]library.Feed, error) {
 	return f.listFeeds, nil
+}
+func (f *fakeLibraryService) GetFeed(ctx context.Context, userID, feedID int) (library.Feed, error) {
+	if f.getFeed != nil {
+		return f.getFeed(ctx, userID, feedID)
+	}
+	return library.Feed{}, library.ErrNotFound
 }
 func (f *fakeLibraryService) AddFeed(ctx context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
 	return f.addFeed(ctx, userID, input)
