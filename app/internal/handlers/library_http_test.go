@@ -29,8 +29,8 @@ func TestDeleteItemHTTPContract(t *testing.T) {
 		{"unexpected", "/items/42", errors.New("broken"), http.StatusInternalServerError},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			service := &fakeLibraryService{deleteItem: func(context.Context, int, int) error { return test.serviceErr }}
-			handler := NewLibraryHandler(service, fakeResolver{})
+			service := &fakeLibraryState{deleteItem: func(context.Context, int, int) error { return test.serviceErr }}
+			handler := newTestLibraryHandler(service, fakeResolver{})
 			router := mux.NewRouter()
 			router.HandleFunc("/items/{id}", handler.HandleDeleteItem).Methods(http.MethodDelete)
 			request := httptest.NewRequest(http.MethodDelete, test.path, nil)
@@ -56,8 +56,8 @@ func TestDeleteFeedHTTPContract(t *testing.T) {
 		{"not found", "?id=42", library.ErrNotFound, http.StatusNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			service := &fakeLibraryService{deleteFeed: func(context.Context, int, int) error { return test.serviceErr }}
-			handler := NewLibraryHandler(service, fakeResolver{})
+			service := &fakeLibraryState{deleteFeed: func(context.Context, int, int) error { return test.serviceErr }}
+			handler := newTestLibraryHandler(service, fakeResolver{})
 			request := httptest.NewRequest(http.MethodDelete, "/delete"+test.query, nil)
 			request = request.WithContext(auth.WithUser(request.Context(), models.User{ID: 7}))
 			response := httptest.NewRecorder()
@@ -70,7 +70,7 @@ func TestDeleteFeedHTTPContract(t *testing.T) {
 }
 
 func TestDeprecatedDeletedItemsEndpoint(t *testing.T) {
-	handler := NewLibraryHandler(&fakeLibraryService{}, fakeResolver{})
+	handler := newTestLibraryHandler(&fakeLibraryState{}, fakeResolver{})
 	unauthenticated := httptest.NewRecorder()
 	handler.HandleAddDeletedItems(unauthenticated, httptest.NewRequest(http.MethodPost, "/add_deleted_items", nil))
 	if unauthenticated.Code != http.StatusUnauthorized {
@@ -94,7 +94,7 @@ func TestDeprecatedDeletedItemsEndpoint(t *testing.T) {
 }
 
 func TestLibraryHandlersEncodeEmptyArrays(t *testing.T) {
-	handler := NewLibraryHandler(&fakeLibraryService{}, fakeResolver{})
+	handler := newTestLibraryHandler(&fakeLibraryState{}, fakeResolver{})
 	for _, invoke := range []struct {
 		name string
 		fn   func(http.ResponseWriter, *http.Request)

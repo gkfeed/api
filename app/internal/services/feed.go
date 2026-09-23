@@ -9,29 +9,32 @@ import (
 )
 
 const (
-	feedTypeYouTube   = "yt"
-	feedTypeInstagram = "inst"
-	feedTypeTikTok    = "tiktok"
-	feedTypeSpotify   = "spoti"
-	feedTypeRezka     = "rezka"
-	feedTypeShikimori = "shiki"
+	feedTypeYouTube   library.FeedType = "yt"
+	feedTypeInstagram library.FeedType = "inst"
+	feedTypeTikTok    library.FeedType = "tiktok"
+	feedTypeSpotify   library.FeedType = "spoti"
+	feedTypeRezka     library.FeedType = "rezka"
+	feedTypeShikimori library.FeedType = "shiki"
 )
 
-var (
-	errInvalidFeedURL = errors.New("invalid feed URL")
-	feedTypesByPrefix = []struct {
-		prefix   string
-		feedType string
-	}{
-		{"https://www.youtube.com/@", feedTypeYouTube},
-		{"https://www.instagram.com/", feedTypeInstagram},
-		{"https://tok.adminforge.de/@", feedTypeTikTok},
-		{"https://open.spotify.com/artist/", feedTypeSpotify},
-		{"https://hdrezka.me/series/", feedTypeRezka},
-		{"https://hdrezka.me/films/", feedTypeRezka},
-		{"https://shikimori.one/animes/", feedTypeShikimori},
-	}
-)
+var errInvalidFeedURL = errors.New("invalid feed URL")
+
+type feedSource struct {
+	prefix       string
+	feedType     library.FeedType
+	titleFromURL func(string) string
+	canonicalURL func(string) string
+}
+
+var feedSources = []feedSource{
+	{"https://www.youtube.com/@", feedTypeYouTube, handleFromURL, nil},
+	{"https://www.instagram.com/", feedTypeInstagram, nil, nil},
+	{"https://tok.adminforge.de/@", feedTypeTikTok, handleFromURL, tiktokURL},
+	{"https://open.spotify.com/artist/", feedTypeSpotify, nil, nil},
+	{"https://hdrezka.me/series/", feedTypeRezka, rezkaTitle, nil},
+	{"https://hdrezka.me/films/", feedTypeRezka, rezkaTitle, nil},
+	{"https://shikimori.one/animes/", feedTypeShikimori, nil, nil},
+}
 
 type FeedResolver struct{}
 
@@ -40,48 +43,47 @@ func (FeedResolver) Resolve(_ context.Context, rawURL string) (library.CreateFee
 }
 
 func CreateFeedFromURL(rawURL string) (library.CreateFeedInput, error) {
-	feedType, err := recogniseFeedType(rawURL)
+	source, err := recogniseFeedSource(rawURL)
 	if err != nil {
 		return library.CreateFeedInput{}, err
 	}
 
-	return library.CreateFeedInput{
-		Title: recogniseFeedTitle(rawURL, feedType),
-		Type:  feedType,
-		URL:   normaliseFeedURL(rawURL, feedType),
-	}, nil
+	title := lastURLSegment(rawURL)
+	if source.titleFromURL != nil {
+		title = source.titleFromURL(rawURL)
+	}
+	canonicalURL := rawURL
+	if source.canonicalURL != nil {
+		canonicalURL = source.canonicalURL(rawURL)
+	}
+	return library.CreateFeedInput{Title: title, Type: source.feedType, URL: canonicalURL}, nil
 }
 
-func recogniseFeedTitle(rawURL, feedType string) string {
+func lastURLSegment(rawURL string) string {
 	trimmedURL := strings.TrimSuffix(rawURL, "/")
-	lastSegment := trimmedURL[strings.LastIndex(trimmedURL, "/")+1:]
-
-	switch feedType {
-	case feedTypeYouTube, feedTypeTikTok:
-		_, handle, _ := strings.Cut(rawURL, "@")
-		return strings.SplitN(handle, "/", 2)[0]
-	case feedTypeRezka:
-		return strings.TrimSuffix(lastSegment, ".html")
-	default:
-		return lastSegment
-	}
+	return trimmedURL[strings.LastIndex(trimmedURL, "/")+1:]
 }
 
-func normaliseFeedURL(rawURL, feedType string) string {
-	if feedType != feedTypeTikTok {
-		return rawURL
-	}
+func handleFromURL(rawURL string) string {
+	_, handle, _ := strings.Cut(rawURL, "@")
+	return strings.SplitN(handle, "/", 2)[0]
+}
 
+func rezkaTitle(rawURL string) string {
+	return strings.TrimSuffix(lastURLSegment(rawURL), ".html")
+}
+
+func tiktokURL(rawURL string) string {
 	_, handle, _ := strings.Cut(rawURL, "@")
 	return "https://www.tiktok.com/@" + handle
 }
 
-func recogniseFeedType(rawURL string) (string, error) {
-	for _, candidate := range feedTypesByPrefix {
+func recogniseFeedSource(rawURL string) (feedSource, error) {
+	for _, candidate := range feedSources {
 		if strings.HasPrefix(rawURL, candidate.prefix) && len(rawURL) > len(candidate.prefix) {
-			return candidate.feedType, nil
+			return candidate, nil
 		}
 	}
 
-	return "", errInvalidFeedURL
+	return feedSource{}, errInvalidFeedURL
 }

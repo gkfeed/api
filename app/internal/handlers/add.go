@@ -30,8 +30,8 @@ func (h *LibraryHandler) HandleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feed, err := h.service.AddFeed(r.Context(), user.ID, library.CreateFeedInput{
-		Title: feedInput.Title, Type: feedInput.Type, URL: feedInput.URL,
+	feed, err := h.feeds.Add(r.Context(), user.ID, library.CreateFeedInput{
+		Title: feedInput.Title, Type: library.FeedType(feedInput.Type), URL: feedInput.URL,
 	})
 	if err != nil {
 		writeInternalServerError(w, err)

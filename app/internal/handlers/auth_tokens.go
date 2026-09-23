@@ -16,6 +16,27 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type tokenPair struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+func (h *AuthHandler) issueTokens(user models.User) (tokenPair, error) {
+	accessToken, err := auth.GenerateAccessToken(user.ID, user.Name, h.cfg)
+	if err != nil {
+		return tokenPair{}, fmt.Errorf("generate access token: %w", err)
+	}
+	refreshToken := models.RefreshToken{
+		ID:        uuid.NewString(),
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(h.cfg.RefreshTokenTTL),
+	}
+	if err := db.StoreRefreshToken(refreshToken); err != nil {
+		return tokenPair{}, fmt.Errorf("store refresh token: %w", err)
+	}
+	return tokenPair{AccessToken: accessToken, RefreshToken: refreshToken.ID}, nil
+}
+
 // @Summary      Refresh access token
 // @Description  Exchanges a valid refresh token for a new access/refresh token pair. Old refresh token is invalidated.
 // @Tags         auth
@@ -56,29 +77,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user.ID, user.Name, h.cfg)
+	tokens, err := h.issueTokens(user)
 	if err != nil {
-		writeInternalServerError(w, fmt.Errorf("generate access token: %w", err))
+		writeInternalServerError(w, err)
 		return
 	}
-
-	newRefreshToken := models.RefreshToken{
-		ID:        uuid.NewString(),
-		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(h.cfg.RefreshTokenTTL),
-	}
-	if err := db.StoreRefreshToken(newRefreshToken); err != nil {
-		writeInternalServerError(w, fmt.Errorf("store refresh token: %w", err))
-		return
-	}
-
-	writeJSON(w, struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}{
-		AccessToken:  accessToken,
-		RefreshToken: newRefreshToken.ID,
-	})
+	writeJSON(w, tokens)
 }
 
 // @Summary      Logout

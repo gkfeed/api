@@ -17,27 +17,19 @@ import (
 
 const maxRequestBodySize = 1 << 20
 
-type LibraryService interface {
-	ListFeeds(context.Context, int) ([]library.Feed, error)
-	AddFeed(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error)
-	DeleteFeed(context.Context, int, int) error
-	GetItem(context.Context, int, int) (library.ItemDetails, error)
-	ListItems(context.Context, int) ([]library.Item, error)
-	ListItemsPage(context.Context, int, *int, int) (library.Page, error)
-	DeleteItem(context.Context, int, int) error
-}
-
 type FeedResolver interface {
 	Resolve(context.Context, string) (library.CreateFeedInput, error)
 }
 
 type LibraryHandler struct {
-	service  LibraryService
+	service  *library.Service
+	feeds    library.FeedRepository
+	items    library.ItemRepository
 	resolver FeedResolver
 }
 
-func NewLibraryHandler(service LibraryService, resolver FeedResolver) *LibraryHandler {
-	return &LibraryHandler{service: service, resolver: resolver}
+func NewLibraryHandler(feeds library.FeedRepository, items library.ItemRepository, resolver FeedResolver) *LibraryHandler {
+	return &LibraryHandler{service: library.NewService(feeds, items), feeds: feeds, items: items, resolver: resolver}
 }
 
 func authenticatedUser(w http.ResponseWriter, r *http.Request) (models.User, bool) {

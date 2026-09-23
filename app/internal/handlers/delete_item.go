@@ -23,7 +23,7 @@ func (h *LibraryHandler) HandleDeleteItem(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	if err := h.service.DeleteItem(r.Context(), user.ID, id); err != nil {
+	if err := h.items.Delete(r.Context(), user.ID, id); err != nil {
 		writeLibraryError(w, err)
 		return
 	}

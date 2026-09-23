@@ -4,14 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"time"
-
-	"gkfeed/api/internal/auth"
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 
 	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/google/uuid"
 )
 
 // @Summary      Begin passkey login
@@ -54,19 +48,9 @@ func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user.ID, user.Name, h.cfg)
+	tokens, err := h.issueTokens(user)
 	if err != nil {
-		writeInternalServerError(w, fmt.Errorf("generate access token: %w", err))
-		return
-	}
-
-	refreshToken := models.RefreshToken{
-		ID:        uuid.NewString(),
-		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(h.cfg.RefreshTokenTTL),
-	}
-	if err := db.StoreRefreshToken(refreshToken); err != nil {
-		writeInternalServerError(w, fmt.Errorf("store refresh token: %w", err))
+		writeInternalServerError(w, err)
 		return
 	}
 
@@ -75,8 +59,8 @@ func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 		CredentialID string `json:"credential_id"`
 	}{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken.ID,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 		CredentialID: base64.RawURLEncoding.EncodeToString(credential.ID),
 	})
 }

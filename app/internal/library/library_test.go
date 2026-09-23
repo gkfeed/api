@@ -18,22 +18,20 @@ func (fakeFeeds) Add(context.Context, int, CreateFeedInput) (AddFeedResult, erro
 func (fakeFeeds) Delete(context.Context, int, int) error { return nil }
 
 type fakeItems struct {
-	list      []Item
-	page      []Item
-	getErr    error
-	deleteErr error
-	gotLimit  int
+	list     []Item
+	page     []Item
+	gotLimit int
 }
 
 func (f *fakeItems) Get(context.Context, int, int) (ItemDetails, error) {
-	return ItemDetails{}, f.getErr
+	return ItemDetails{}, nil
 }
 func (f *fakeItems) List(context.Context, int) ([]Item, error) { return f.list, nil }
 func (f *fakeItems) ListPage(_ context.Context, _ int, _ *int, limit int) ([]Item, error) {
 	f.gotLimit = limit
 	return f.page, nil
 }
-func (f *fakeItems) Delete(context.Context, int, int) error { return f.deleteErr }
+func (f *fakeItems) Delete(context.Context, int, int) error { return nil }
 
 func TestServiceShapesPagination(t *testing.T) {
 	items := &fakeItems{page: []Item{{ID: 3}, {ID: 2}, {ID: 1}}}
@@ -65,15 +63,8 @@ func TestServiceNormalizesEmptyCollections(t *testing.T) {
 
 func TestServicePropagatesRepositoryErrors(t *testing.T) {
 	want := errors.New("storage failed")
-	items := &fakeItems{getErr: want, deleteErr: ErrNotFound}
-	service := NewService(fakeFeeds{err: want}, items)
+	service := NewService(fakeFeeds{err: want}, &fakeItems{})
 	if _, err := service.ListFeeds(t.Context(), 1); !errors.Is(err, want) {
 		t.Fatalf("ListFeeds error = %v", err)
-	}
-	if _, err := service.GetItem(t.Context(), 1, 2); !errors.Is(err, want) {
-		t.Fatalf("GetItem error = %v", err)
-	}
-	if err := service.DeleteItem(t.Context(), 1, 2); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("DeleteItem error = %v", err)
 	}
 }

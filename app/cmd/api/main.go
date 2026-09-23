@@ -108,8 +108,9 @@ func run() error {
 }
 
 func buildLibraryHandler(database *sql.DB) *handlers.LibraryHandler {
-	service := library.NewService(storage.NewFeedRepository(database), storage.NewItemRepository(database))
-	return handlers.NewLibraryHandler(service, services.FeedResolver{})
+	feeds := storage.NewFeedRepository(database)
+	items := storage.NewItemRepository(database)
+	return handlers.NewLibraryHandler(feeds, items, services.FeedResolver{})
 }
 
 func newHandler(configuration config.Config, provided ...*handlers.LibraryHandler) http.Handler {
@@ -119,7 +120,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	} else if database, err := db.ConfiguredDB(); err == nil {
 		libraryHandler = buildLibraryHandler(database)
 	} else {
-		libraryHandler = handlers.NewLibraryHandler(unavailableLibraryService{}, services.FeedResolver{})
+		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{})
 	}
 	router := mux.NewRouter()
 	authenticate := auth.Authenticate(configuration)
@@ -139,7 +140,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	api.HandleFunc("/feed", authenticate(libraryHandler.HandleRSSFeed)).Methods(http.MethodGet)
 	api.HandleFunc("/add", authenticate(libraryHandler.HandleAddFeed)).Methods(http.MethodPost)
 	api.HandleFunc("/delete", authenticate(libraryHandler.HandleDeleteFeed)).Methods(http.MethodDelete)
-	api.HandleFunc("/add_lazy", authenticate(libraryHandler.HandleAddFeedLazy)).Methods(http.MethodPost)
+	api.HandleFunc("/add_lazy", authenticate(libraryHandler.HandleAddFeedByURL)).Methods(http.MethodPost)
 	api.HandleFunc("/add_deleted_items", authenticate(libraryHandler.HandleAddDeletedItems)).Methods(http.MethodPost)
 	api.HandleFunc("/item", authenticate(libraryHandler.HandleGetItemByID)).Methods(http.MethodGet)
 	api.HandleFunc("/get_items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
@@ -170,26 +171,29 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	return corsHandler
 }
 
-type unavailableLibraryService struct{}
+type unavailableFeeds struct{}
 
-func (unavailableLibraryService) ListFeeds(context.Context, int) ([]library.Feed, error) {
+func (unavailableFeeds) List(context.Context, int) ([]library.Feed, error) {
 	return nil, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) AddFeed(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
+func (unavailableFeeds) Add(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
 	return library.AddFeedResult{}, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) DeleteFeed(context.Context, int, int) error {
+func (unavailableFeeds) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) GetItem(context.Context, int, int) (library.ItemDetails, error) {
+
+type unavailableItems struct{}
+
+func (unavailableItems) Get(context.Context, int, int) (library.ItemDetails, error) {
 	return library.ItemDetails{}, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) ListItems(context.Context, int) ([]library.Item, error) {
+func (unavailableItems) List(context.Context, int) ([]library.Item, error) {
 	return nil, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) ListItemsPage(context.Context, int, *int, int) (library.Page, error) {
-	return library.Page{}, errors.New("library storage is unavailable")
+func (unavailableItems) ListPage(context.Context, int, *int, int) ([]library.Item, error) {
+	return nil, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) DeleteItem(context.Context, int, int) error {
+func (unavailableItems) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")
 }

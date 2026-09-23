@@ -32,7 +32,7 @@ func (h *LibraryHandler) HandleGetItemByID(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	details, err := h.service.GetItem(r.Context(), user.ID, itemID)
+	details, err := h.items.Get(r.Context(), user.ID, itemID)
 	if err != nil {
 		writeLibraryError(w, err)
 		return

@@ -28,7 +28,7 @@ func (h *LibraryHandler) HandleDeleteFeed(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.service.DeleteFeed(r.Context(), user.ID, id); err != nil {
+	if err := h.feeds.Delete(r.Context(), user.ID, id); err != nil {
 		writeLibraryError(w, err)
 		return
 	}

@@ -6,7 +6,7 @@ import (
 	"gkfeed/api/internal/library"
 )
 
-type fakeLibraryService struct {
+type fakeLibraryState struct {
 	addFeed    func(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error)
 	deleteFeed func(context.Context, int, int) error
 	deleteItem func(context.Context, int, int) error
@@ -15,30 +15,39 @@ type fakeLibraryService struct {
 	page       library.Page
 }
 
-func (f *fakeLibraryService) ListFeeds(context.Context, int) ([]library.Feed, error) {
-	return f.listFeeds, nil
+type fakeFeedRepository struct{ state *fakeLibraryState }
+
+func (r fakeFeedRepository) List(context.Context, int) ([]library.Feed, error) {
+	return r.state.listFeeds, nil
 }
-func (f *fakeLibraryService) AddFeed(ctx context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
-	return f.addFeed(ctx, userID, input)
+func (r fakeFeedRepository) Add(ctx context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
+	return r.state.addFeed(ctx, userID, input)
 }
-func (f *fakeLibraryService) DeleteFeed(ctx context.Context, userID, feedID int) error {
-	if f.deleteFeed != nil {
-		return f.deleteFeed(ctx, userID, feedID)
+func (r fakeFeedRepository) Delete(ctx context.Context, userID, feedID int) error {
+	if r.state.deleteFeed != nil {
+		return r.state.deleteFeed(ctx, userID, feedID)
 	}
 	return nil
 }
-func (f *fakeLibraryService) GetItem(context.Context, int, int) (library.ItemDetails, error) {
+
+type fakeItemRepository struct{ state *fakeLibraryState }
+
+func (r fakeItemRepository) Get(context.Context, int, int) (library.ItemDetails, error) {
 	return library.ItemDetails{}, nil
 }
-func (f *fakeLibraryService) ListItems(context.Context, int) ([]library.Item, error) {
-	return f.listItems, nil
+func (r fakeItemRepository) List(context.Context, int) ([]library.Item, error) {
+	return r.state.listItems, nil
 }
-func (f *fakeLibraryService) ListItemsPage(context.Context, int, *int, int) (library.Page, error) {
-	return f.page, nil
+func (r fakeItemRepository) ListPage(context.Context, int, *int, int) ([]library.Item, error) {
+	return r.state.page.Items, nil
 }
-func (f *fakeLibraryService) DeleteItem(ctx context.Context, userID, itemID int) error {
-	if f.deleteItem != nil {
-		return f.deleteItem(ctx, userID, itemID)
+func (r fakeItemRepository) Delete(ctx context.Context, userID, itemID int) error {
+	if r.state.deleteItem != nil {
+		return r.state.deleteItem(ctx, userID, itemID)
 	}
 	return nil
+}
+
+func newTestLibraryHandler(state *fakeLibraryState, resolver FeedResolver) *LibraryHandler {
+	return NewLibraryHandler(fakeFeedRepository{state}, fakeItemRepository{state}, resolver)
 }

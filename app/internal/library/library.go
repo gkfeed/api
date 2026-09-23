@@ -8,10 +8,12 @@ import (
 
 var ErrNotFound = errors.New("library resource not found")
 
+type FeedType string
+
 type Feed struct {
 	ID     int
 	Title  string
-	Type   string
+	Type   FeedType
 	URL    string
 	UserID int
 }
@@ -42,7 +44,7 @@ type Page struct {
 
 type CreateFeedInput struct {
 	Title string
-	Type  string
+	Type  FeedType
 	URL   string
 }
 
@@ -79,18 +81,6 @@ func (s *Service) ListFeeds(ctx context.Context, userID int) ([]Feed, error) {
 	return feeds, nil
 }
 
-func (s *Service) AddFeed(ctx context.Context, userID int, input CreateFeedInput) (AddFeedResult, error) {
-	return s.feeds.Add(ctx, userID, input)
-}
-
-func (s *Service) DeleteFeed(ctx context.Context, userID, feedID int) error {
-	return s.feeds.Delete(ctx, userID, feedID)
-}
-
-func (s *Service) GetItem(ctx context.Context, userID, itemID int) (ItemDetails, error) {
-	return s.items.Get(ctx, userID, itemID)
-}
-
 func (s *Service) ListItems(ctx context.Context, userID int) ([]Item, error) {
 	items, err := s.items.List(ctx, userID)
 	if err != nil {
@@ -116,8 +106,4 @@ func (s *Service) ListItemsPage(ctx context.Context, userID int, cursor *int, li
 
 	nextCursor := items[limit-1].ID
 	return Page{Items: items[:limit], NextCursor: &nextCursor}, nil
-}
-
-func (s *Service) DeleteItem(ctx context.Context, userID, itemID int) error {
-	return s.items.Delete(ctx, userID, itemID)
 }
