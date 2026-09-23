@@ -3,16 +3,13 @@ package handlers
 import (
 	"net/http"
 	"strconv"
-
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 )
 
 const defaultItemsLimit = 100
 
 type getItemsResponse struct {
-	Items      []models.Item `json:"items"`
-	NextCursor *int          `json:"next_cursor,omitempty"`
+	Items      []itemDTO `json:"items"`
+	NextCursor *int      `json:"next_cursor,omitempty"`
 }
 
 // @Summary      Get items
@@ -28,7 +25,7 @@ type getItemsResponse struct {
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/get_items [get]
-func HandleGetItems(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleGetItems(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
@@ -39,13 +36,13 @@ func HandleGetItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := db.GetUserItemsPage(user.ID, cursor, limit+1)
+	page, err := h.service.ListItemsPage(r.Context(), user.ID, cursor, limit)
 	if err != nil {
 		writeInternalServerError(w, err)
 		return
 	}
 
-	writeJSON(w, itemsPage(items, limit))
+	writeJSON(w, getItemsResponse{Items: itemDTOs(page.Items), NextCursor: page.NextCursor})
 }
 
 func itemsPageParameters(w http.ResponseWriter, r *http.Request) (int, *int, bool) {
@@ -78,13 +75,4 @@ func positiveQueryInt(w http.ResponseWriter, r *http.Request, name string, fallb
 	}
 
 	return parsed, true
-}
-
-func itemsPage(items []models.Item, limit int) getItemsResponse {
-	if len(items) <= limit {
-		return getItemsResponse{Items: items}
-	}
-
-	nextCursor := items[limit-1].ID
-	return getItemsResponse{Items: items[:limit], NextCursor: &nextCursor}
 }

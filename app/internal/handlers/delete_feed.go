@@ -2,9 +2,6 @@ package handlers
 
 import (
 	"net/http"
-
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 )
 
 // @Summary      Delete feed
@@ -14,13 +11,13 @@ import (
 // @Param        id   query     int  true  "Feed ID"
 // @Security     BasicAuth
 // @Security     BearerAuth
-// @Success      200  {object}  object{deleted=bool}
+// @Success      204
 // @Failure      400
 // @Failure      401
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/delete [delete]
-func HandleDeleteFeed(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
@@ -31,22 +28,9 @@ func HandleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feed, err := db.GetFeedByID(id)
-	if err != nil {
-		writeLookupError(w, err)
+	if err := h.service.DeleteFeed(r.Context(), user.ID, id); err != nil {
+		writeLibraryError(w, err)
 		return
 	}
-	if feed.UserID != user.ID {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		return
-	}
-	if err := db.DeleteFeedByID(id); err != nil {
-		writeInternalServerError(w, err)
-		return
-	}
-
-	writeJSON(w, struct {
-		Deleted bool        `json:"deleted"`
-		Item    models.Feed `json:"item"`
-	}{Deleted: true, Item: feed})
+	w.WriteHeader(http.StatusNoContent)
 }

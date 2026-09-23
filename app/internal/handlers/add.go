@@ -3,8 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
+	"gkfeed/api/internal/library"
 )
 
 // @Summary      Add feed
@@ -12,7 +11,7 @@ import (
 // @Tags         feeds
 // @Accept       json
 // @Produce      json
-// @Param        feed  body      models.Feed  true  "Feed to add (title, type, url)"
+// @Param        feed  body      createFeedDTO  true  "Feed to add (title, type, url)"
 // @Security     BasicAuth
 // @Security     BearerAuth
 // @Success      200   {object}  feedMutationResponse
@@ -20,22 +19,24 @@ import (
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/add [post]
-func HandleAddFeed(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleAddFeed(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
 	}
 
-	var feedInput models.Feed
+	var feedInput createFeedDTO
 	if !decodeJSON(w, r, &feedInput) {
 		return
 	}
 
-	feed, err := db.AddFeed(feedInput, user.ID)
+	feed, err := h.service.AddFeed(r.Context(), user.ID, library.CreateFeedInput{
+		Title: feedInput.Title, Type: feedInput.Type, URL: feedInput.URL,
+	})
 	if err != nil {
 		writeInternalServerError(w, err)
 		return
 	}
 
-	writeJSON(w, feedMutationResponse{Created: true, Item: feed})
+	writeJSON(w, feedMutationResponse{Created: feed.Created, Item: toFeedDTO(feed.Feed)})
 }

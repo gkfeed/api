@@ -1,19 +1,56 @@
 definitions:
+  handlers.createFeedDTO:
+    properties:
+      title:
+        type: string
+      type:
+        type: string
+      url:
+        type: string
+    type: object
+  handlers.feedDTO:
+    properties:
+      id:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+      url:
+        type: string
+      userid:
+        type: integer
+    type: object
   handlers.feedMutationResponse:
     properties:
       created:
         type: boolean
       item:
-        $ref: '#/definitions/models.Feed'
+        $ref: '#/definitions/handlers.feedDTO'
     type: object
   handlers.getItemsResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/models.Item'
+          $ref: '#/definitions/handlers.itemDTO'
         type: array
       next_cursor:
         type: integer
+    type: object
+  handlers.itemDTO:
+    properties:
+      date:
+        type: string
+      feed_id:
+        type: integer
+      id:
+        type: integer
+      link:
+        type: string
+      text:
+        type: string
+      title:
+        type: string
     type: object
   handlers.loginRequest:
     properties:
@@ -45,34 +82,6 @@ definitions:
       token_type:
         type: string
     type: object
-  models.Feed:
-    properties:
-      id:
-        type: integer
-      title:
-        type: string
-      type:
-        type: string
-      url:
-        type: string
-      userid:
-        type: integer
-    type: object
-  models.Item:
-    properties:
-      date:
-        type: string
-      feed_id:
-        type: integer
-      id:
-        type: integer
-      link:
-        type: string
-      text:
-        type: string
-      title:
-        type: string
-    type: object
 info:
   contact:
     name: GKFeed
@@ -92,7 +101,7 @@ paths:
         name: feed
         required: true
         schema:
-          $ref: '#/definitions/models.Feed'
+          $ref: '#/definitions/handlers.createFeedDTO'
       produces:
       - application/json
       responses:
@@ -101,11 +110,11 @@ paths:
           schema:
             $ref: '#/definitions/handlers.feedMutationResponse'
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -114,38 +123,25 @@ paths:
       - feeds
   /api/v1/add_deleted_items:
     post:
-      consumes:
-      - application/json
-      description: Marks the specified items as deleted for the authenticated user.
-      parameters:
-      - description: Item IDs to mark as deleted
-        in: body
-        name: body
-        required: true
-        schema:
-          allOf:
-          - type: object
-          - properties:
-              itemIds:
-                items:
-                  type: integer
-                type: array
-            type: object
+      description: Gone. Use DELETE /api/v1/items/{id} instead.
       produces:
       - application/json
       responses:
-        "200":
-          description: ""
-        "400":
-          description: ""
         "401":
-          description: ""
-        "500":
-          description: ""
+          description: Unauthorized
+        "410":
+          description: Gone
+          schema:
+            properties:
+              error:
+                type: string
+              replacement:
+                type: string
+            type: object
       security:
       - BasicAuth: []
       - BearerAuth: []
-      summary: Mark items as deleted
+      summary: Deprecated item hide endpoint
       tags:
       - items
   /api/v1/add_lazy:
@@ -160,12 +156,10 @@ paths:
         name: feed
         required: true
         schema:
-          allOf:
-          - type: object
-          - properties:
-              url:
-                type: string
-            type: object
+          properties:
+            url:
+              type: string
+          type: object
       produces:
       - application/json
       responses:
@@ -174,11 +168,11 @@ paths:
           schema:
             $ref: '#/definitions/handlers.feedMutationResponse'
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -195,23 +189,21 @@ paths:
           description: OK
           schema:
             items:
-              allOf:
-              - type: object
-              - properties:
-                  created_at:
-                    type: string
-                  id:
-                    type: string
-                  last_used_at:
-                    type: string
-                  name:
-                    type: string
-                type: object
+              properties:
+                created_at:
+                  type: string
+                id:
+                  type: string
+                last_used_at:
+                  type: string
+                name:
+                  type: string
+              type: object
             type: array
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -229,15 +221,15 @@ paths:
         type: string
       responses:
         "204":
-          description: ""
+          description: No Content
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "404":
-          description: ""
+          description: Not Found
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -265,11 +257,11 @@ paths:
           schema:
             $ref: '#/definitions/handlers.tokenResponse'
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       summary: Login with a password
       tags:
       - auth
@@ -281,9 +273,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: ""
+          description: OK
         "500":
-          description: ""
+          description: Internal Server Error
       summary: Begin passkey login
       tags:
       - auth
@@ -306,20 +298,18 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - type: object
-            - properties:
-                access_token:
-                  type: string
-                credential_id:
-                  type: string
-                refresh_token:
-                  type: string
-              type: object
+            properties:
+              access_token:
+                type: string
+              credential_id:
+                type: string
+              refresh_token:
+                type: string
+            type: object
         "400":
-          description: ""
+          description: Bad Request
         "500":
-          description: ""
+          description: Internal Server Error
       summary: Finish passkey login
       tags:
       - auth
@@ -339,11 +329,11 @@ paths:
       - application/json
       responses:
         "204":
-          description: ""
+          description: No Content
         "400":
-          description: ""
+          description: Bad Request
         "500":
-          description: ""
+          description: Internal Server Error
       summary: Logout
       tags:
       - auth
@@ -353,11 +343,11 @@ paths:
         user.
       responses:
         "204":
-          description: ""
+          description: No Content
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -373,16 +363,14 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - type: object
-            - properties:
-                id:
-                  type: integer
-                name:
-                  type: string
-              type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+            type: object
         "401":
-          description: ""
+          description: Unauthorized
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -410,11 +398,11 @@ paths:
           schema:
             $ref: '#/definitions/handlers.tokenResponse'
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       summary: Refresh access token
       tags:
       - auth
@@ -434,11 +422,11 @@ paths:
       - application/json
       responses:
         "200":
-          description: ""
+          description: OK
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -464,20 +452,18 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - type: object
-            - properties:
-                id:
-                  type: string
-                name:
-                  type: string
-              type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+            type: object
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -496,23 +482,16 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - type: object
-            - properties:
-                deleted:
-                  type: boolean
-              type: object
+        "204":
+          description: No Content
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "404":
-          description: ""
+          description: Not Found
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -526,11 +505,11 @@ paths:
       - application/rss+xml
       responses:
         "200":
-          description: ""
+          description: OK
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -573,11 +552,11 @@ paths:
           schema:
             $ref: '#/definitions/handlers.getItemsResponse'
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -600,24 +579,48 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - type: object
-            - properties:
-                feed:
-                  type: object
-                item:
-                  type: object
-              type: object
+            properties:
+              feed:
+                type: object
+              item:
+                type: object
+            type: object
         "400":
-          description: ""
+          description: Bad Request
         "401":
-          description: ""
+          description: Unauthorized
         "404":
-          description: ""
+          description: Not Found
       security:
       - BasicAuth: []
       - BearerAuth: []
       summary: Get item by ID
+      tags:
+      - items
+  /api/v1/items/{id}:
+    delete:
+      description: Permanently deletes an item owned by the authenticated user.
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Delete item
       tags:
       - items
   /api/v1/list:
@@ -633,9 +636,9 @@ paths:
               type: object
             type: array
         "401":
-          description: ""
+          description: Unauthorized
         "500":
-          description: ""
+          description: Internal Server Error
       security:
       - BasicAuth: []
       - BearerAuth: []

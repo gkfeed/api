@@ -1,10 +1,11 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"strings"
 
-	"gkfeed/api/internal/models"
+	"gkfeed/api/internal/library"
 )
 
 const (
@@ -32,13 +33,19 @@ var (
 	}
 )
 
-func CreateFeedFromURL(rawURL string) (models.Feed, error) {
+type FeedResolver struct{}
+
+func (FeedResolver) Resolve(_ context.Context, rawURL string) (library.CreateFeedInput, error) {
+	return CreateFeedFromURL(rawURL)
+}
+
+func CreateFeedFromURL(rawURL string) (library.CreateFeedInput, error) {
 	feedType, err := recogniseFeedType(rawURL)
 	if err != nil {
-		return models.Feed{}, err
+		return library.CreateFeedInput{}, err
 	}
 
-	return models.Feed{
+	return library.CreateFeedInput{
 		Title: recogniseFeedTitle(rawURL, feedType),
 		Type:  feedType,
 		URL:   normaliseFeedURL(rawURL, feedType),

@@ -1,8 +1,8 @@
 package config
 
 import (
+	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -10,7 +10,7 @@ import (
 
 const (
 	addressEnvironmentVariable           = "GKFEED_ADDRESS"
-	databaseEnvironmentVariable          = "GKFEED_DB_PATH"
+	databaseEnvironmentVariable          = "GKFEED_DATABASE_URL"
 	allowedOriginsEnvironmentVariable    = "GKFEED_ALLOWED_ORIGINS"
 	accessTTLEnvironmentVariable         = "GKFEED_ACCESS_TTL"
 	jwtRefreshTTLEnvironmentVariable     = "GKFEED_JWT_REFRESH_TTL"
@@ -33,7 +33,7 @@ const (
 
 type Config struct {
 	Address           string
-	DatabasePath      string
+	DatabaseURL       string
 	AllowedOrigins    []string
 	ReadHeaderTimeout time.Duration
 
@@ -60,9 +60,12 @@ func (c Config) EffectiveRefreshTokenTTL() time.Duration {
 }
 
 func Load() (Config, error) {
+	if strings.TrimSpace(os.Getenv(databaseEnvironmentVariable)) == "" {
+		return Config{}, fmt.Errorf("%s must be set to a PostgreSQL connection URL", databaseEnvironmentVariable)
+	}
 	return Config{
 		Address:           valueOrDefault(addressEnvironmentVariable, ":8086"),
-		DatabasePath:      valueOrDefault(databaseEnvironmentVariable, filepath.Join("..", "data", "db.sqlite")),
+		DatabaseURL:       strings.TrimSpace(os.Getenv(databaseEnvironmentVariable)),
 		AllowedOrigins:    allowedOrigins(),
 		ReadHeaderTimeout: 5 * time.Second,
 

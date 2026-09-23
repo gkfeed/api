@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
+	_ "github.com/mattn/go-sqlite3"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -15,6 +15,7 @@ import (
 	"gkfeed/api/internal/config"
 	"gkfeed/api/internal/db"
 	"gkfeed/api/internal/passwordhash"
+	"gkfeed/api/internal/testschema"
 )
 
 func TestDeleteRouteDoesNotAllowGet(t *testing.T) {
@@ -51,27 +52,21 @@ func TestSwaggerRoutesAreUnderAPI(t *testing.T) {
 
 func TestMeRouteAcceptsBasicAuth(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "db.sqlite")
-	db.Configure(databasePath)
-	t.Cleanup(func() { db.Configure("") })
-
-	if err := db.RunMigrations(); err != nil {
-		t.Fatalf("RunMigrations() returned error: %v", err)
-	}
-
 	database, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
 	defer database.Close()
+	db.Configure(database)
+	t.Cleanup(func() { db.Configure(nil) })
+
+	testschema.Init(t, database)
 
 	if _, err := database.Exec(
 		"INSERT INTO users (id, name, hashed_password) VALUES (?, ?, ?)",
-		7, "reader", "secret",
+		7, "reader", testHash(t, "secret"),
 	); err != nil {
 		t.Fatalf("insert test user: %v", err)
-	}
-	if err := db.RunMigrations(); err != nil {
-		t.Fatalf("RunMigrations() after legacy user insert returned error: %v", err)
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
@@ -98,27 +93,20 @@ func TestMeRouteAcceptsBasicAuth(t *testing.T) {
 
 func TestPasswordLoginRefreshesAndRevokesRotatedSessions(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "db.sqlite")
-	db.Configure(databasePath)
-	t.Cleanup(func() { db.Configure("") })
-
-	if err := db.RunMigrations(); err != nil {
-		t.Fatalf("RunMigrations() returned error: %v", err)
-	}
-	hash, err := passwordhash.HashPassword("secret")
-	if err != nil {
-		t.Fatalf("HashPassword() returned error: %v", err)
-	}
 	database, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
 	defer database.Close()
-	if _, err := database.Exec(
-		"INSERT INTO users (id, name, hashed_password) VALUES (?, ?, ?)",
-		1,
-		"reader",
-		hash,
-	); err != nil {
+	database.SetMaxOpenConns(1)
+	db.Configure(database)
+	t.Cleanup(func() { db.Configure(nil) })
+	testschema.Init(t, database)
+	hash, err := passwordhash.HashPassword("secret")
+	if err != nil {
+		t.Fatalf("HashPassword() returned error: %v", err)
+	}
+	if _, err := database.Exec("INSERT INTO users (id, name, hashed_password) VALUES (?, ?, ?)", 1, "reader", hash); err != nil {
 		t.Fatalf("insert test user: %v", err)
 	}
 
@@ -156,14 +144,14 @@ func TestPasswordLoginRefreshesAndRevokesRotatedSessions(t *testing.T) {
 	if tokens.TokenType != "Bearer" || tokens.ExpiresIn != 1800 || tokens.RefreshExpiresIn != 7_776_000 {
 		t.Fatalf("login token metadata = %#v", tokens)
 	}
-	var storedRefreshHash []byte
+	var storedRefreshHash string
 	if err := database.QueryRow(
-		"SELECT token_hash FROM auth_refresh_tokens WHERE user_id = ?",
+		"SELECT id FROM refresh_tokens WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP",
 		1,
 	).Scan(&storedRefreshHash); err != nil {
 		t.Fatalf("read stored refresh token hash: %v", err)
 	}
-	if bytes.Equal(storedRefreshHash, []byte(tokens.RefreshToken)) {
+	if strings.Contains(storedRefreshHash, tokens.RefreshToken) {
 		t.Fatal("database stored the raw refresh token")
 	}
 
@@ -218,18 +206,15 @@ func TestPasswordLoginRefreshesAndRevokesRotatedSessions(t *testing.T) {
 
 func TestItemRouteRequiresAuthenticationAndOwner(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "db.sqlite")
-	db.Configure(databasePath)
-	t.Cleanup(func() { db.Configure("") })
-
-	if err := db.RunMigrations(); err != nil {
-		t.Fatalf("RunMigrations() returned error: %v", err)
-	}
-
 	database, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
 	defer database.Close()
+	db.Configure(database)
+	t.Cleanup(func() { db.Configure(nil) })
+
+	testschema.Init(t, database)
 
 	for _, user := range []struct {
 		id       int
@@ -239,12 +224,9 @@ func TestItemRouteRequiresAuthenticationAndOwner(t *testing.T) {
 		{1, "owner", "owner-password"},
 		{2, "other", "other-password"},
 	} {
-		if _, err := database.Exec("INSERT INTO users (id, name, hashed_password) VALUES (?, ?, ?)", user.id, user.name, user.password); err != nil {
+		if _, err := database.Exec("INSERT INTO users (id, name, hashed_password) VALUES (?, ?, ?)", user.id, user.name, testHash(t, user.password)); err != nil {
 			t.Fatalf("insert test user %d: %v", user.id, err)
 		}
-	}
-	if err := db.RunMigrations(); err != nil {
-		t.Fatalf("RunMigrations() after legacy user inserts returned error: %v", err)
 	}
 	if _, err := database.Exec(
 		"INSERT INTO feed (id, title, url, type, user_id) VALUES (?, ?, ?, ?, ?)",
@@ -303,4 +285,13 @@ func TestFeedTypesRouteIsPublic(t *testing.T) {
 	if !slices.Contains(feedTypes, "web") || !slices.Contains(feedTypes, "spoti:playlist") {
 		t.Fatalf("GET /api/v1/feed_types returned unexpected feed types: %#v", feedTypes)
 	}
+}
+
+func testHash(t *testing.T, password string) string {
+	t.Helper()
+	hash, err := passwordhash.HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hash
 }

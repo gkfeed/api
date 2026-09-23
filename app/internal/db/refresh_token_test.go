@@ -11,9 +11,6 @@ import (
 
 func TestRotateAuthRefreshTokenDetectsReuseAndRevokesFamily(t *testing.T) {
 	useTestDatabase(t)
-	if err := InitRefreshTokenSchema(); err != nil {
-		t.Fatalf("InitRefreshTokenSchema() returned error: %v", err)
-	}
 
 	oldToken, err := testOpaqueToken()
 	if err != nil {
@@ -64,9 +61,6 @@ func TestRotateAuthRefreshTokenDetectsReuseAndRevokesFamily(t *testing.T) {
 
 func TestRotateAuthRefreshTokenIsAtomic(t *testing.T) {
 	useTestDatabase(t)
-	if err := InitRefreshTokenSchema(); err != nil {
-		t.Fatalf("InitRefreshTokenSchema() returned error: %v", err)
-	}
 
 	oldToken, err := testOpaqueToken()
 	if err != nil {

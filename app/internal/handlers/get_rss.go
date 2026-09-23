@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 	"gkfeed/api/internal/services/rss"
 )
 
@@ -20,17 +18,13 @@ import (
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/feed [get]
-func HandleRSSFeed(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleRSSFeed(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
 	}
 
-	responseWithRSSFeed(w, user)
-}
-
-func responseWithRSSFeed(w http.ResponseWriter, user models.User) {
-	items, err := db.GetUserItems(user.ID)
+	items, err := h.service.ListItems(r.Context(), user.ID)
 	if err != nil {
 		writeInternalServerError(w, err)
 		return

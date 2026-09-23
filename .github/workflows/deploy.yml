@@ -4,8 +4,30 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      cutover_ready:
+        description: "Infra schema, grants, importer, sequence synchronization, and cutover checks are complete"
+        required: true
+        type: boolean
+        default: false
 jobs:
+  test:
+    name: Test and vet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
+      - name: Run tests and vet
+        run: make check
+
   deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.cutover_ready
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Deploy with SSH

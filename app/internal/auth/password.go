@@ -20,7 +20,7 @@ func authenticateWithDB(username, password string) (models.User, bool, error) {
 		return models.User{}, false, err
 	}
 
-	authenticated := passwordhash.ComparePassword(user.HashedPassword, password)
+	authenticated := user.HashedPassword.Valid && passwordhash.ComparePassword(user.HashedPassword.String, password)
 	return user, authenticated, nil
 }
 

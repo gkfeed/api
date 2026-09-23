@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"net/http"
-
-	"gkfeed/api/internal/db"
 )
 
 // @Summary      List feeds
@@ -16,16 +14,16 @@ import (
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/list [get]
-func HandleListOfFeeds(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleListOfFeeds(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
 	}
 
-	feeds, err := db.GetUserFeeds(user.ID)
+	feeds, err := h.service.ListFeeds(r.Context(), user.ID)
 	if err != nil {
 		writeInternalServerError(w, err)
 		return
 	}
-	writeJSON(w, feeds)
+	writeJSON(w, feedDTOs(feeds))
 }

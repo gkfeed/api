@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"database/sql"
 	"errors"
 	"log"
 	"net/http"
@@ -18,7 +19,7 @@ import (
 func TestBasicAuthProvidesAuthenticatedUser(t *testing.T) {
 	hash := testPasswordHash(t, "secret")
 	replaceUserLookup(t, func(name string) (models.User, error) {
-		return models.User{ID: 7, Name: name, HashedPassword: hash}, nil
+		return models.User{ID: 7, Name: name, HashedPassword: sql.NullString{String: hash, Valid: true}}, nil
 	})
 
 	var receivedUser models.User
@@ -43,7 +44,7 @@ func TestBasicAuthProvidesAuthenticatedUser(t *testing.T) {
 func TestBasicAuthRejectsInvalidPassword(t *testing.T) {
 	hash := testPasswordHash(t, "secret")
 	replaceUserLookup(t, func(name string) (models.User, error) {
-		return models.User{Name: name, HashedPassword: hash}, nil
+		return models.User{Name: name, HashedPassword: sql.NullString{String: hash, Valid: true}}, nil
 	})
 
 	handler := BasicAuth(func(http.ResponseWriter, *http.Request) {
@@ -82,7 +83,7 @@ func TestBasicAuthReturnsServerErrorWhenLookupFails(t *testing.T) {
 func TestAuthenticateFallsBackToBasicAuth(t *testing.T) {
 	hash := testPasswordHash(t, "secret")
 	replaceUserLookup(t, func(name string) (models.User, error) {
-		return models.User{ID: 99, Name: name, HashedPassword: hash}, nil
+		return models.User{ID: 99, Name: name, HashedPassword: sql.NullString{String: hash, Valid: true}}, nil
 	})
 
 	var receivedUser models.User
@@ -157,7 +158,7 @@ func TestParseBearerToken(t *testing.T) {
 
 func TestAuthenticateDoesNotLogAuthorizationHeader(t *testing.T) {
 	replaceUserLookup(t, func(name string) (models.User, error) {
-		return models.User{Name: name, HashedPassword: "secret"}, nil
+		return models.User{Name: name, HashedPassword: sql.NullString{String: "secret", Valid: true}}, nil
 	})
 
 	var logs bytes.Buffer
@@ -203,4 +204,19 @@ func testPasswordHash(t *testing.T, password string) string {
 		t.Fatalf("HashPassword() returned error: %v", err)
 	}
 	return hash
+}
+
+func TestBasicAuthRejectsNullPassword(t *testing.T) {
+	replaceUserLookup(t, func(name string) (models.User, error) {
+		return models.User{ID: 7, Name: name}, nil
+	})
+	for _, password := range []string{"", "secret"} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.SetBasicAuth("passwordless", password)
+		response := httptest.NewRecorder()
+		BasicAuth(func(http.ResponseWriter, *http.Request) { t.Error("authenticated passwordless user") })(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d", response.Code)
+		}
+	}
 }

@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,11 +9,36 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gorilla/mux"
 	"gkfeed/api/internal/auth"
+	"gkfeed/api/internal/library"
 	"gkfeed/api/internal/models"
 )
 
 const maxRequestBodySize = 1 << 20
+
+type LibraryService interface {
+	ListFeeds(context.Context, int) ([]library.Feed, error)
+	AddFeed(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error)
+	DeleteFeed(context.Context, int, int) error
+	GetItem(context.Context, int, int) (library.ItemDetails, error)
+	ListItems(context.Context, int) ([]library.Item, error)
+	ListItemsPage(context.Context, int, *int, int) (library.Page, error)
+	DeleteItem(context.Context, int, int) error
+}
+
+type FeedResolver interface {
+	Resolve(context.Context, string) (library.CreateFeedInput, error)
+}
+
+type LibraryHandler struct {
+	service  LibraryService
+	resolver FeedResolver
+}
+
+func NewLibraryHandler(service LibraryService, resolver FeedResolver) *LibraryHandler {
+	return &LibraryHandler{service: service, resolver: resolver}
+}
 
 func authenticatedUser(w http.ResponseWriter, r *http.Request) (models.User, bool) {
 	user, ok := auth.UserFromContext(r.Context())
@@ -37,12 +62,21 @@ func writeInternalServerError(w http.ResponseWriter, err error) {
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
-func writeLookupError(w http.ResponseWriter, err error) {
-	if errors.Is(err, sql.ErrNoRows) {
+func writeLibraryError(w http.ResponseWriter, err error) {
+	if errors.Is(err, library.ErrNotFound) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 	writeInternalServerError(w, err)
+}
+
+func pathID(w http.ResponseWriter, r *http.Request) (int, bool) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid id", http.StatusBadRequest)
+		return 0, false
+	}
+	return id, true
 }
 
 func queryID(w http.ResponseWriter, r *http.Request) (int, bool) {

@@ -2,14 +2,11 @@ package handlers
 
 import (
 	"net/http"
-
-	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 )
 
 type getItemResponse struct {
-	Item models.Item `json:"item"`
-	Feed models.Feed `json:"feed"`
+	Item itemDTO `json:"item"`
+	Feed feedDTO `json:"feed"`
 }
 
 // @Summary      Get item by ID
@@ -24,7 +21,7 @@ type getItemResponse struct {
 // @Security     BasicAuth
 // @Security     BearerAuth
 // @Router       /api/v1/item [get]
-func HandleGetItemByID(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleGetItemByID(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
@@ -35,11 +32,11 @@ func HandleGetItemByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, feed, err := db.GetUserItemByID(user.ID, itemID)
+	details, err := h.service.GetItem(r.Context(), user.ID, itemID)
 	if err != nil {
-		writeLookupError(w, err)
+		writeLibraryError(w, err)
 		return
 	}
 
-	writeJSON(w, getItemResponse{Item: item, Feed: feed})
+	writeJSON(w, getItemResponse{Item: toItemDTO(details.Item), Feed: toFeedDTO(details.Feed)})
 }

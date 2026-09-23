@@ -7,7 +7,5 @@ services:
       - "8086:8086"
     environment:
       GKFEED_ADDRESS: ":8086"
-      GKFEED_DB_PATH: "/data/db.sqlite"
-    volumes:
-      - ~/.local/share/gkfeed/data:/data
+      GKFEED_DATABASE_URL: "${GKFEED_DATABASE_URL:?set GKFEED_DATABASE_URL to the PostgreSQL application connection URL}"
     restart: always

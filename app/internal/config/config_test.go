@@ -2,13 +2,14 @@ package config
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestLoadUsesEnvironment(t *testing.T) {
 	t.Setenv(addressEnvironmentVariable, "127.0.0.1:9000")
-	t.Setenv(databaseEnvironmentVariable, "/tmp/gkfeed.sqlite")
+	t.Setenv(databaseEnvironmentVariable, "postgres://localhost/gkfeed")
 	t.Setenv(allowedOriginsEnvironmentVariable, "https://one.example, https://two.example")
 	t.Setenv(accessTTLEnvironmentVariable, "45m")
 
@@ -20,8 +21,8 @@ func TestLoadUsesEnvironment(t *testing.T) {
 	if configuration.Address != "127.0.0.1:9000" {
 		t.Fatalf("Address = %q, want %q", configuration.Address, "127.0.0.1:9000")
 	}
-	if configuration.DatabasePath != "/tmp/gkfeed.sqlite" {
-		t.Fatalf("DatabasePath = %q, want %q", configuration.DatabasePath, "/tmp/gkfeed.sqlite")
+	if configuration.DatabaseURL != "postgres://localhost/gkfeed" {
+		t.Fatalf("DatabaseURL = %q, want %q", configuration.DatabaseURL, "postgres://localhost/gkfeed")
 	}
 	wantOrigins := []string{"https://one.example", "https://two.example"}
 	if !reflect.DeepEqual(configuration.AllowedOrigins, wantOrigins) {
@@ -53,6 +54,7 @@ func TestEffectiveTokenTTLs(t *testing.T) {
 }
 
 func TestLoadReturnsIndependentDefaultOrigins(t *testing.T) {
+	t.Setenv(databaseEnvironmentVariable, "postgres://localhost/gkfeed")
 	t.Setenv(allowedOriginsEnvironmentVariable, "")
 	first, err := Load()
 	if err != nil {
@@ -66,5 +68,12 @@ func TestLoadReturnsIndependentDefaultOrigins(t *testing.T) {
 	}
 	if second.AllowedOrigins[0] == "changed" {
 		t.Fatal("Load() returned shared default origins")
+	}
+}
+
+func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
+	t.Setenv(databaseEnvironmentVariable, "")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), databaseEnvironmentVariable) {
+		t.Fatalf("error = %v", err)
 	}
 }

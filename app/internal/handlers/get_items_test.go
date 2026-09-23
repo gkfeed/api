@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"gkfeed/api/internal/models"
 )
 
 func TestItemsPageParameters(t *testing.T) {
@@ -35,16 +33,6 @@ func TestItemsPageParameters(t *testing.T) {
 				t.Fatalf("itemsPageParameters() = (%d, %v, %t), want (%d, %v, %t)", limit, cursor, ok, test.wantLimit, test.wantCursor, test.wantOK)
 			}
 		})
-	}
-}
-
-func TestItemsPage(t *testing.T) {
-	items := []models.Item{{ID: 3}, {ID: 2}, {ID: 1}}
-
-	page := itemsPage(items, 2)
-
-	if len(page.Items) != 2 || page.NextCursor == nil || *page.NextCursor != 2 {
-		t.Fatalf("itemsPage() = %#v, want two items and cursor 2", page)
 	}
 }
 
