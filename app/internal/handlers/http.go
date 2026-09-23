@@ -24,6 +24,8 @@ type LibraryService interface {
 	GetItem(context.Context, int, int) (library.ItemDetails, error)
 	ListItems(context.Context, int) ([]library.Item, error)
 	ListItemsPage(context.Context, int, *int, int) (library.Page, error)
+	SyncItemsPage(context.Context, int, int, int, int) (library.SyncPage, error)
+	ItemChanges(context.Context, int, int64, int) (library.ChangesPage, error)
 	DeleteItem(context.Context, int, int) error
 }
 

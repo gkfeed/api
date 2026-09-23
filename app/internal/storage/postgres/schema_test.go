@@ -18,9 +18,10 @@ func TestCheckSchema(t *testing.T) {
 		{name: "missing registry"},
 		{name: "empty registry", registry: true},
 		{name: "schema without grants", registry: true, versions: []string{"20260904184133"}},
-		{name: "grants without schema", registry: true, versions: []string{MinimumMigration}},
-		{name: "required migrations", registry: true, versions: []string{"20260904184133", MinimumMigration}, wantReady: true},
-		{name: "later migrations allowed", registry: true, versions: []string{"20260904184133", MinimumMigration, "20260906000000"}, wantReady: true},
+		{name: "grants without schema", registry: true, versions: []string{ApplicationRolesMigration}},
+		{name: "schema and grants without item sync", registry: true, versions: []string{"20260904184133", ApplicationRolesMigration}},
+		{name: "required migrations", registry: true, versions: []string{"20260904184133", ApplicationRolesMigration, ItemSyncMigration}, wantReady: true},
+		{name: "later migrations allowed", registry: true, versions: []string{"20260904184133", ApplicationRolesMigration, ItemSyncMigration, "20260924000000"}, wantReady: true},
 		{name: "later version cannot replace prerequisites", registry: true, versions: []string{"20260906000000"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -50,7 +51,7 @@ func TestCheckSchema(t *testing.T) {
 			if (err == nil) != test.wantReady {
 				t.Fatalf("CheckSchema() = %v", err)
 			}
-			if err != nil && !strings.Contains(err.Error(), MinimumMigration) {
+			if err != nil && !strings.Contains(err.Error(), ItemSyncMigration) {
 				t.Fatalf("error does not identify required migration: %v", err)
 			}
 		})

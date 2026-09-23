@@ -891,6 +891,109 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/v2/items": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a bounded item page and a sync cursor for later changes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "items"
+                ],
+                "summary": "List items for synchronization",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default 100, maximum 500)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque page cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.syncItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/items/changes": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns item mutations after a sync cursor. Apply each response before using its next cursor.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "items"
+                ],
+                "summary": "Get item changes",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Changes per page (default 100, maximum 500)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque sync cursor",
+                        "name": "cursor",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.itemChangesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -953,6 +1056,29 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.itemChangesResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "upserted": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.itemDTO"
+                    }
+                }
+            }
+        },
         "handlers.itemDTO": {
             "type": "object",
             "properties": {
@@ -988,6 +1114,26 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.syncItemsResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.itemDTO"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "sync_cursor": {
                     "type": "string"
                 }
             }

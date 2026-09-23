@@ -3,11 +3,121 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"gkfeed/api/internal/library"
 )
+
+func (r *ItemRepository) SyncPage(ctx context.Context, userID, afterID, maxID, limit int) (library.SyncPage, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return library.SyncPage{}, fmt.Errorf("begin items snapshot: %w", err)
+	}
+	defer tx.Rollback()
+	var sequence int64
+	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(id), 0) FROM item_changes WHERE user_id = $1", userID).Scan(&sequence); err != nil {
+		return library.SyncPage{}, fmt.Errorf("read change sequence: %w", err)
+	}
+	if maxID == 0 {
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(item.id), 0) FROM item JOIN feed ON item.feed_id = feed.id WHERE feed.user_id = $1`, userID).Scan(&maxID); err != nil {
+			return library.SyncPage{}, fmt.Errorf("read item ceiling: %w", err)
+		}
+	}
+	query := `SELECT ` + itemColumns + ` FROM item JOIN feed ON item.feed_id = feed.id WHERE feed.user_id = $1 AND item.id <= $2`
+	args := []any{userID, maxID}
+	if afterID > 0 {
+		query += " AND item.id < $3"
+		args = append(args, afterID)
+	}
+	query += fmt.Sprintf(" ORDER BY item.id DESC LIMIT $%d", len(args)+1)
+	args = append(args, limit+1)
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return library.SyncPage{}, fmt.Errorf("query items snapshot: %w", err)
+	}
+	items := make([]library.Item, 0, limit+1)
+	for rows.Next() {
+		item, scanErr := scanItem(rows)
+		if scanErr != nil {
+			rows.Close()
+			return library.SyncPage{}, fmt.Errorf("scan snapshot item: %w", scanErr)
+		}
+		items = append(items, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return library.SyncPage{}, fmt.Errorf("iterate snapshot items: %w", err)
+	}
+	page := library.SyncPage{Items: items, MaxID: maxID, Sequence: sequence, HasMore: len(items) > limit}
+	if page.HasMore {
+		page.Items = items[:limit]
+	}
+	if len(page.Items) > 0 {
+		page.LastID = page.Items[len(page.Items)-1].ID
+	}
+	if err := tx.Commit(); err != nil {
+		return library.SyncPage{}, fmt.Errorf("commit items snapshot: %w", err)
+	}
+	return page, nil
+}
+
+func (r *ItemRepository) Changes(ctx context.Context, userID int, afterSequence int64, limit int) (library.ChangesPage, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, item_id, payload FROM item_changes WHERE user_id = $1 AND id > $2 ORDER BY id ASC LIMIT $3`, userID, afterSequence, limit+1)
+	if err != nil {
+		return library.ChangesPage{}, fmt.Errorf("query item changes: %w", err)
+	}
+	defer rows.Close()
+	changes := make([]library.Change, 0, limit+1)
+	for rows.Next() {
+		var change library.Change
+		var payload []byte
+		if err := rows.Scan(&change.Sequence, &change.ItemID, &payload); err != nil {
+			return library.ChangesPage{}, fmt.Errorf("scan item change: %w", err)
+		}
+		if len(payload) > 0 {
+			var stored struct {
+				ID     int
+				FeedID int
+				Title  string
+				Text   string
+				Date   string
+				Link   string
+			}
+			if err := json.Unmarshal(payload, &stored); err != nil {
+				return library.ChangesPage{}, fmt.Errorf("decode item change: %w", err)
+			}
+			item := library.Item{ID: stored.ID, FeedID: stored.FeedID, Title: stored.Title, Text: stored.Text, Link: stored.Link}
+			if stored.Date != "" {
+				for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999", "2006-01-02"} {
+					item.Date, err = time.Parse(layout, stored.Date)
+					if err == nil {
+						break
+					}
+				}
+				if err != nil {
+					return library.ChangesPage{}, fmt.Errorf("parse item change date %q: %w", stored.Date, err)
+				}
+			}
+			change.Item = &item
+		}
+		changes = append(changes, change)
+	}
+	if err := rows.Err(); err != nil {
+		return library.ChangesPage{}, fmt.Errorf("iterate item changes: %w", err)
+	}
+	page := library.ChangesPage{Changes: changes, Sequence: afterSequence, HasMore: len(changes) > limit}
+	if page.HasMore {
+		page.Changes = changes[:limit]
+	}
+	if len(page.Changes) > 0 {
+		page.Sequence = page.Changes[len(page.Changes)-1].Sequence
+	}
+	return page, nil
+}
 
 const (
 	feedColumns = "feed.id, feed.title, feed.url, feed.type, feed.user_id"
