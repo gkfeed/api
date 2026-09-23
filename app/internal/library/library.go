@@ -48,6 +48,7 @@ type CreateFeedInput struct {
 
 type FeedRepository interface {
 	List(ctx context.Context, userID int) ([]Feed, error)
+	Get(ctx context.Context, userID, feedID int) (Feed, error)
 	Add(ctx context.Context, userID int, input CreateFeedInput) (AddFeedResult, error)
 	Delete(ctx context.Context, userID, feedID int) error
 }
@@ -77,6 +78,10 @@ func (s *Service) ListFeeds(ctx context.Context, userID int) ([]Feed, error) {
 		feeds = []Feed{}
 	}
 	return feeds, nil
+}
+
+func (s *Service) GetFeed(ctx context.Context, userID, feedID int) (Feed, error) {
+	return s.feeds.Get(ctx, userID, feedID)
 }
 
 func (s *Service) AddFeed(ctx context.Context, userID int, input CreateFeedInput) (AddFeedResult, error) {

@@ -32,7 +32,7 @@ import (
 var testPasskeyHTML string
 
 // @title           GKFeed API
-// @version         1.0
+// @version         2.0
 // @description     RSS feed aggregator with passkey authentication.
 
 // @contact.name   GKFeed
@@ -145,6 +145,15 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	api.HandleFunc("/get_items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
 	api.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
 
+	v2 := router.PathPrefix("/api/v2").Subrouter()
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListOfFeeds)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
+	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleGetFeed)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleDeleteFeedByID)).Methods(http.MethodDelete)
+	v2.HandleFunc("/items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleGetItemByPathID)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
+
 	authRouter := api.PathPrefix("/auth").Subrouter()
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
 
@@ -174,6 +183,9 @@ type unavailableLibraryService struct{}
 
 func (unavailableLibraryService) ListFeeds(context.Context, int) ([]library.Feed, error) {
 	return nil, errors.New("library storage is unavailable")
+}
+func (unavailableLibraryService) GetFeed(context.Context, int, int) (library.Feed, error) {
+	return library.Feed{}, errors.New("library storage is unavailable")
 }
 func (unavailableLibraryService) AddFeed(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
 	return library.AddFeedResult{}, errors.New("library storage is unavailable")

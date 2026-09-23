@@ -39,6 +39,18 @@ func (r *FeedRepository) List(ctx context.Context, userID int) ([]library.Feed, 
 	return feeds, nil
 }
 
+func (r *FeedRepository) Get(ctx context.Context, userID, feedID int) (library.Feed, error) {
+	feed, err := scanFeed(r.db.QueryRowContext(ctx,
+		"SELECT "+feedColumns+" FROM feed WHERE id = $1 AND user_id = $2", feedID, userID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return library.Feed{}, library.ErrNotFound
+	}
+	if err != nil {
+		return library.Feed{}, fmt.Errorf("get feed: %w", err)
+	}
+	return feed, nil
+}
+
 func (r *FeedRepository) Add(ctx context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
 	feed, err := scanFeed(r.db.QueryRowContext(ctx,
 		"INSERT INTO feed (title, type, url, user_id) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, url, type) DO NOTHING RETURNING "+feedColumns,
