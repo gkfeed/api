@@ -72,9 +72,33 @@ complete before selecting that input.
 
 Swagger UI is available at `/api/swagger/index.html`.
 
+The resource routes are available under `/api/v2`. Basic and Bearer credentials
+are accepted for every route below. Feed creation requires `title`, `type`, and
+`url`; repeated creation returns `200` with `created: false` and the existing
+feed. Deleting a feed also deletes its items.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v2/feeds` | List the user's feeds |
+| `GET` | `/api/v2/feeds/{id}` | Get an owned feed; missing or foreign IDs return `404` |
+| `POST` | `/api/v2/feeds` | Create a feed with explicit fields |
+| `DELETE` | `/api/v2/feeds/{id}` | Delete a feed and its items |
+| `GET` | `/api/v2/items?limit=<n>&cursor=<id>` | List items with the existing cursor pagination |
+| `GET` | `/api/v2/items/sync` | Start or continue an item sync with an opaque cursor |
+| `GET` | `/api/v2/items/changes` | Read item changes after a sync cursor |
+| `GET` | `/api/v2/items/{id}` | Get an owned item and its feed |
+| `DELETE` | `/api/v2/items/{id}` | Delete an owned item |
+
+The existing v2 list and mutation responses keep their v1 JSON shapes and status codes.
+`GET /api/v2/feeds/{id}` returns a feed object from the list. The v1 routes
+below remain available while clients migrate. v2 has no lazy feed creation or
+item PATCH route.
+
+### Legacy v1 routes
+
 | Method | Route | Authentication | Purpose |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/list` | Basic | List the user's feeds |
+| `GET` | `/api/v1/list` | Basic or Bearer | List the user's feeds |
 | `GET` | `/api/v1/feed_types` | None | List feed types supported by the parser |
 | `GET` | `/api/v1/feed` | Basic | Return the user's RSS feed |
 | `POST` | `/api/v1/add` | Basic | Add a feed |
@@ -82,9 +106,7 @@ Swagger UI is available at `/api/swagger/index.html`.
 | `DELETE` | `/api/v1/delete?id=<id>` | Basic or Bearer | Permanently delete a feed and all its items |
 | `DELETE` | `/api/v1/items/{id}` | Basic or Bearer | Permanently delete an owned item |
 | `POST` | `/api/v1/add_deleted_items` | Basic or Bearer | Deprecated compatibility stub; returns `410 Gone` |
-| `GET` | `/api/v1/get_items` | Basic | Return cursor-paginated items |
-| `GET` | `/api/v2/items` | Basic or Bearer | Return stable ID-ordered pages with opaque cursors |
-| `GET` | `/api/v2/items/changes` | Basic or Bearer | Return item changes after a sync cursor |
+| `GET` | `/api/v1/get_items` | Basic or Bearer | Return cursor-paginated items |
 | `GET` | `/api/v1/item?id=<id>` | Basic or Bearer | Return the authenticated user's item and its feed |
 | `GET` | `/api/v1/auth/me` | Basic or Bearer | Return the authenticated user |
 
@@ -95,7 +117,7 @@ clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive
 
 ### Item synchronization
 
-`GET /api/v2/items?limit=100` returns `items`, `next_cursor`, `has_more`, and
+`GET /api/v2/items/sync?limit=100` returns `items`, `next_cursor`, `has_more`, and
 `sync_cursor`. Fetch subsequent pages with `next_cursor` while `has_more` is
 true. The first page fixes an upper item ID and change sequence; later inserts
 cannot shift earlier pages, and deleted items are skipped. Apply changes from

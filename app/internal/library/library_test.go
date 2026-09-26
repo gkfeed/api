@@ -11,7 +11,8 @@ type fakeFeeds struct {
 	err  error
 }
 
-func (f fakeFeeds) List(context.Context, int) ([]Feed, error) { return f.list, f.err }
+func (f fakeFeeds) List(context.Context, int) ([]Feed, error)   { return f.list, f.err }
+func (f fakeFeeds) Get(context.Context, int, int) (Feed, error) { return Feed{}, f.err }
 func (fakeFeeds) Add(context.Context, int, CreateFeedInput) (AddFeedResult, error) {
 	return AddFeedResult{}, nil
 }

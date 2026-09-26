@@ -108,7 +108,7 @@ type syncItemsResponse struct {
 // @Failure 400
 // @Failure 401
 // @Failure 500
-// @Router /api/v2/items [get]
+// @Router /api/v2/items/sync [get]
 func (h *ItemsSyncHandler) HandleItems(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {

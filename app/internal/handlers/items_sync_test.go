@@ -45,7 +45,7 @@ func TestItemsSyncCursorsAndDelta(t *testing.T) {
 		return r.WithContext(auth.WithUser(r.Context(), models.User{ID: userID}))
 	}
 	first := httptest.NewRecorder()
-	handler.HandleItems(first, request("/api/v2/items?limit=1", 7))
+	handler.HandleItems(first, request("/api/v2/items/sync?limit=1", 7))
 	if first.Code != 200 {
 		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
 	}
@@ -57,7 +57,7 @@ func TestItemsSyncCursorsAndDelta(t *testing.T) {
 		t.Fatalf("first=%#v", a)
 	}
 	second := httptest.NewRecorder()
-	handler.HandleItems(second, request("/api/v2/items?limit=1&cursor="+url.QueryEscape(a.NextCursor), 7))
+	handler.HandleItems(second, request("/api/v2/items/sync?limit=1&cursor="+url.QueryEscape(a.NextCursor), 7))
 	var b syncItemsResponse
 	if err := json.Unmarshal(second.Body.Bytes(), &b); err != nil {
 		t.Fatal(err)
@@ -67,12 +67,12 @@ func TestItemsSyncCursorsAndDelta(t *testing.T) {
 		t.Fatalf("second=%#v", b)
 	}
 	denied := httptest.NewRecorder()
-	handler.HandleItems(denied, request("/api/v2/items?cursor="+url.QueryEscape(a.NextCursor), 8))
+	handler.HandleItems(denied, request("/api/v2/items/sync?cursor="+url.QueryEscape(a.NextCursor), 8))
 	if denied.Code != 400 {
 		t.Fatalf("cross-user cursor status=%d", denied.Code)
 	}
 	tampered := httptest.NewRecorder()
-	handler.HandleItems(tampered, request("/api/v2/items?cursor="+url.QueryEscape(a.NextCursor+"x"), 7))
+	handler.HandleItems(tampered, request("/api/v2/items/sync?cursor="+url.QueryEscape(a.NextCursor+"x"), 7))
 	if tampered.Code != 400 {
 		t.Fatalf("tampered cursor status=%d", tampered.Code)
 	}
