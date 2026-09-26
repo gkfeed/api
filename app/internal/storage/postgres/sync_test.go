@@ -44,8 +44,8 @@ func TestSyncPaginationAndChanges(t *testing.T) {
 	if changes.HasMore || len(changes.Changes) != 2 || changes.Changes[0].ItemID != inserted || changes.Changes[0].Item == nil || changes.Changes[1].ItemID != ids[1] || changes.Changes[1].Item != nil {
 		t.Fatalf("changes = %#v", changes)
 	}
-	if changes.Changes[0].Item.Date.IsZero() {
-		t.Fatalf("upsert date was lost: %#v", changes.Changes[0].Item)
+	if item := changes.Changes[0].Item; item.ID != inserted || item.FeedID != owner.ID || item.Title != "item-0" || item.Date.IsZero() {
+		t.Fatalf("upsert fields were lost: %#v", item)
 	}
 	foreignChanges, err := items.Changes(t.Context(), 2, 0, 10)
 	if err != nil {

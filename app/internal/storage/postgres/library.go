@@ -80,17 +80,13 @@ func (r *ItemRepository) Changes(ctx context.Context, userID int, afterSequence 
 		}
 		if len(payload) > 0 {
 			var stored struct {
-				ID     int
-				FeedID int
-				Title  string
-				Text   string
-				Date   string
-				Link   string
+				library.Item
+				Date string
 			}
 			if err := json.Unmarshal(payload, &stored); err != nil {
 				return library.ChangesPage{}, fmt.Errorf("decode item change: %w", err)
 			}
-			item := library.Item{ID: stored.ID, FeedID: stored.FeedID, Title: stored.Title, Text: stored.Text, Link: stored.Link}
+			item := stored.Item
 			if stored.Date != "" {
 				for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999", "2006-01-02"} {
 					item.Date, err = time.Parse(layout, stored.Date)

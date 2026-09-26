@@ -61,11 +61,6 @@ type ChangesPage struct {
 	HasMore  bool
 }
 
-type ItemSyncRepository interface {
-	SyncPage(ctx context.Context, userID, afterID, maxID, limit int) (SyncPage, error)
-	Changes(ctx context.Context, userID int, afterSequence int64, limit int) (ChangesPage, error)
-}
-
 type CreateFeedInput struct {
 	Title string
 	Type  string
@@ -83,7 +78,8 @@ type ItemRepository interface {
 	List(ctx context.Context, userID int) ([]Item, error)
 	ListPage(ctx context.Context, userID int, cursor *int, limit int) ([]Item, error)
 	Delete(ctx context.Context, userID, itemID int) error
-	ItemSyncRepository
+	SyncPage(ctx context.Context, userID, afterID, maxID, limit int) (SyncPage, error)
+	Changes(ctx context.Context, userID int, afterSequence int64, limit int) (ChangesPage, error)
 }
 
 type Service struct {
