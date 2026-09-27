@@ -14,6 +14,8 @@ type fakeLibraryService struct {
 	getFeed    func(context.Context, int, int) (library.Feed, error)
 	listItems  []library.Item
 	page       library.Page
+	syncPage   func(context.Context, int, int, int, int) (library.SyncPage, error)
+	changes    func(context.Context, int, int64, int) (library.ChangesPage, error)
 }
 
 func (f *fakeLibraryService) ListFeeds(context.Context, int) ([]library.Feed, error) {
@@ -42,6 +44,18 @@ func (f *fakeLibraryService) ListItems(context.Context, int) ([]library.Item, er
 }
 func (f *fakeLibraryService) ListItemsPage(context.Context, int, *int, int) (library.Page, error) {
 	return f.page, nil
+}
+func (f *fakeLibraryService) SyncItemsPage(ctx context.Context, userID, afterID, maxID, limit int) (library.SyncPage, error) {
+	if f.syncPage != nil {
+		return f.syncPage(ctx, userID, afterID, maxID, limit)
+	}
+	return library.SyncPage{Items: []library.Item{}}, nil
+}
+func (f *fakeLibraryService) ItemChanges(ctx context.Context, userID int, sequence int64, limit int) (library.ChangesPage, error) {
+	if f.changes != nil {
+		return f.changes(ctx, userID, sequence, limit)
+	}
+	return library.ChangesPage{Changes: []library.Change{}}, nil
 }
 func (f *fakeLibraryService) DeleteItem(ctx context.Context, userID, itemID int) error {
 	if f.deleteItem != nil {

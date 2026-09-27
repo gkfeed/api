@@ -35,6 +35,12 @@ func (f *fakeItems) ListPage(_ context.Context, _ int, _ *int, limit int) ([]Ite
 	return f.page, nil
 }
 func (f *fakeItems) Delete(context.Context, int, int) error { return f.deleteErr }
+func (f *fakeItems) SyncPage(context.Context, int, int, int, int) (SyncPage, error) {
+	return SyncPage{}, nil
+}
+func (f *fakeItems) Changes(context.Context, int, int64, int) (ChangesPage, error) {
+	return ChangesPage{}, nil
+}
 
 func TestServiceShapesPagination(t *testing.T) {
 	items := &fakeItems{page: []Item{{ID: 3}, {ID: 2}, {ID: 1}}}

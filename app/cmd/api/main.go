@@ -145,12 +145,15 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	api.HandleFunc("/get_items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
 	api.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
 
+	syncHandler := libraryHandler.SyncHandler(configuration.JWTSecret)
 	v2 := router.PathPrefix("/api/v2").Subrouter()
 	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListOfFeeds)).Methods(http.MethodGet)
 	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
 	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleGetFeed)).Methods(http.MethodGet)
 	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleDeleteFeedByID)).Methods(http.MethodDelete)
 	v2.HandleFunc("/items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/sync", authenticate(syncHandler.HandleItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/changes", authenticate(syncHandler.HandleChanges)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleGetItemByPathID)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
 
@@ -201,6 +204,12 @@ func (unavailableLibraryService) ListItems(context.Context, int) ([]library.Item
 }
 func (unavailableLibraryService) ListItemsPage(context.Context, int, *int, int) (library.Page, error) {
 	return library.Page{}, errors.New("library storage is unavailable")
+}
+func (unavailableLibraryService) SyncItemsPage(context.Context, int, int, int, int) (library.SyncPage, error) {
+	return library.SyncPage{}, errors.New("library storage is unavailable")
+}
+func (unavailableLibraryService) ItemChanges(context.Context, int, int64, int) (library.ChangesPage, error) {
+	return library.ChangesPage{}, errors.New("library storage is unavailable")
 }
 func (unavailableLibraryService) DeleteItem(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")

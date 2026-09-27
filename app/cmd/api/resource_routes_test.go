@@ -76,6 +76,17 @@ func TestV2ResourceRoutesAndV1Compatibility(t *testing.T) {
 			t.Errorf("%s %s as %s: status %d, want %d: %s", test.method, test.path, test.username, response.Code, test.status, response.Body.String())
 		}
 	}
+	page := call(http.MethodGet, "/api/v2/items/sync?limit=1", "owner", "")
+	var syncPage struct {
+		SyncCursor string `json:"sync_cursor"`
+	}
+	if err := json.Unmarshal(page.Body.Bytes(), &syncPage); page.Code != 200 || err != nil || syncPage.SyncCursor == "" {
+		t.Fatalf("sync page = %d %s, %v", page.Code, page.Body.String(), err)
+	}
+	changes := call(http.MethodGet, "/api/v2/items/changes?cursor="+syncPage.SyncCursor, "owner", "")
+	if changes.Code != 200 || !strings.Contains(changes.Body.String(), `"next_cursor"`) {
+		t.Fatalf("sync changes = %d %s", changes.Code, changes.Body.String())
+	}
 
 	feedResponse := call(http.MethodGet, "/api/v2/feeds/11", "owner", "")
 	var feed struct {

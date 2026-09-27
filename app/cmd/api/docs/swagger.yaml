@@ -44,6 +44,21 @@ definitions:
       next_cursor:
         type: integer
     type: object
+  handlers.itemChangesResponse:
+    properties:
+      deleted_ids:
+        items:
+          type: integer
+        type: array
+      has_more:
+        type: boolean
+      next_cursor:
+        type: string
+      upserted:
+        items:
+          $ref: '#/definitions/handlers.itemDTO'
+        type: array
+    type: object
   handlers.itemDTO:
     properties:
       date:
@@ -67,6 +82,19 @@ definitions:
   handlers.registerBeginRequest:
     properties:
       name:
+        type: string
+    type: object
+  handlers.syncItemsResponse:
+    properties:
+      has_more:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/handlers.itemDTO'
+        type: array
+      next_cursor:
+        type: string
+      sync_cursor:
         type: string
     type: object
 info:
@@ -792,6 +820,70 @@ paths:
       - BasicAuth: []
       - BearerAuth: []
       summary: Get item by ID
+      tags:
+      - items
+  /api/v2/items/changes:
+    get:
+      description: Returns item mutations after a sync cursor. Apply each response
+        before using its next cursor.
+      parameters:
+      - description: Changes per page (default 100, maximum 500)
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque sync cursor
+        in: query
+        name: cursor
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.itemChangesResponse'
+        "400":
+          description: ""
+        "401":
+          description: ""
+        "500":
+          description: ""
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Get item changes
+      tags:
+      - items
+  /api/v2/items/sync:
+    get:
+      description: Returns a bounded item page and a sync cursor for later changes.
+      parameters:
+      - description: Items per page (default 100, maximum 500)
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque page cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.syncItemsResponse'
+        "400":
+          description: ""
+        "401":
+          description: ""
+        "500":
+          description: ""
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: List items for synchronization
       tags:
       - items
 securityDefinitions:
