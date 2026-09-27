@@ -21,7 +21,7 @@ synchronization, and cutover checks.
 Infra owns all DDL. Startup only reads `public.schema_migrations` and requires
 `20260904184133_create_canonical_schema` and
 `20260905082946_add_application_roles`, and the item sync migration
-`20260923000000`. Missing migrations or an unreadable
+`20260927071753_add_item_changes`. Missing migrations or an unreadable
 registry prevent startup. Later migrations are allowed.
 
 The importer owns legacy password conversion and deleted-item tombstone
@@ -128,17 +128,16 @@ user, and invalidated when `GKFEED_JWT_SECRET` rotates.
 `GET /api/v2/items/changes?cursor=<sync_cursor>&limit=100` returns `upserted`,
 `deleted_ids`, `next_cursor`, and `has_more`. Apply each response before using
 its `next_cursor`; continue immediately while `has_more` is true, then poll
-later with the last cursor. An unchanged feed returns empty arrays and a valid
+later with the last cursor. No changes return empty arrays and a valid
 next cursor. Repeated mutations of the same item within one response collapse
 to its last state. Both routes cap `limit` at 500 and reject invalid or
 cross-user cursors with `400`.
 
-The v2 routes require the item change table and triggers in
-[`docs/infra/20260923000000_item_changes.sql`](docs/infra/20260923000000_item_changes.sql).
-Infra owns production DDL, so apply that SQL through `gkfeed/infra` before
-deploying this API version. The trigger records database writes, including
-deletes caused by feed deletion. Do not prune the change table without a
-cursor expiry and recovery policy.
+The v2 routes require the item change table and triggers from
+[`gkfeed/infra` migration `20260927071753`](https://github.com/gkfeed/infra/blob/master/db/migrations/20260927071753_add_item_changes.sql).
+Apply that migration before deploying this API version. The triggers record
+database writes, including deletes caused by feed deletion. Do not prune the
+change table without a cursor expiry and recovery policy.
 
 Repeated feed creation uses `(user_id, url, type)` as its identity and returns the
 existing feed with `created: false`. The original title remains unchanged.

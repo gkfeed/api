@@ -8,7 +8,7 @@ import (
 
 // ApplicationRolesMigration includes the canonical schema and application grants.
 const ApplicationRolesMigration = "20260905082946"
-const ItemSyncMigration = "20260923000000"
+const ItemSyncMigration = "20260927071753"
 
 func CheckSchema(ctx context.Context, database *sql.DB) error {
 	var ready bool
