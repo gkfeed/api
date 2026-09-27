@@ -32,7 +32,7 @@ import (
 var testPasskeyHTML string
 
 // @title           GKFeed API
-// @version         1.0
+// @version         2.0
 // @description     RSS feed aggregator with passkey authentication.
 
 // @contact.name   GKFeed
@@ -146,6 +146,18 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	api.HandleFunc("/get_items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
 	api.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
 
+	syncHandler := libraryHandler.SyncHandler(configuration.JWTSecret)
+	v2 := router.PathPrefix("/api/v2").Subrouter()
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListOfFeeds)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
+	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleGetFeed)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleDeleteFeedByID)).Methods(http.MethodDelete)
+	v2.HandleFunc("/items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/sync", authenticate(syncHandler.HandleItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/changes", authenticate(syncHandler.HandleChanges)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleGetItemByPathID)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
+
 	authRouter := api.PathPrefix("/auth").Subrouter()
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
 
@@ -196,4 +208,14 @@ func (unavailableItems) ListPage(context.Context, int, *int, int) ([]library.Ite
 }
 func (unavailableItems) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")
+}
+
+func (unavailableFeeds) Get(context.Context, int, int) (library.Feed, error) {
+	return library.Feed{}, errors.New("library storage is unavailable")
+}
+func (unavailableItems) SyncPage(context.Context, int, int, int, int) (library.SyncPage, error) {
+	return library.SyncPage{}, errors.New("library storage is unavailable")
+}
+func (unavailableItems) Changes(context.Context, int, int64, int) (library.ChangesPage, error) {
+	return library.ChangesPage{}, errors.New("library storage is unavailable")
 }

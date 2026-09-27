@@ -20,7 +20,8 @@ synchronization, and cutover checks.
 
 Infra owns all DDL. Startup only reads `public.schema_migrations` and requires
 `20260904184133_create_canonical_schema` and
-`20260905082946_add_application_roles`. Missing migrations or an unreadable
+`20260905082946_add_application_roles`, and the item sync migration
+`20260927071753_add_item_changes`. Missing migrations or an unreadable
 registry prevent startup. Later migrations are allowed.
 
 The importer owns legacy password conversion and deleted-item tombstone
@@ -71,9 +72,33 @@ complete before selecting that input.
 
 Swagger UI is available at `/api/swagger/index.html`.
 
+The resource routes are available under `/api/v2`. Basic and Bearer credentials
+are accepted for every route below. Feed creation requires `title`, `type`, and
+`url`; repeated creation returns `200` with `created: false` and the existing
+feed. Deleting a feed also deletes its items.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v2/feeds` | List the user's feeds |
+| `GET` | `/api/v2/feeds/{id}` | Get an owned feed; missing or foreign IDs return `404` |
+| `POST` | `/api/v2/feeds` | Create a feed with explicit fields |
+| `DELETE` | `/api/v2/feeds/{id}` | Delete a feed and its items |
+| `GET` | `/api/v2/items?limit=<n>&cursor=<id>` | List items with the existing cursor pagination |
+| `GET` | `/api/v2/items/sync` | Start or continue an item sync with an opaque cursor |
+| `GET` | `/api/v2/items/changes` | Read item changes after a sync cursor |
+| `GET` | `/api/v2/items/{id}` | Get an owned item and its feed |
+| `DELETE` | `/api/v2/items/{id}` | Delete an owned item |
+
+The existing v2 list and mutation responses keep their v1 JSON shapes and status codes.
+`GET /api/v2/feeds/{id}` returns a feed object from the list. The v1 routes
+below remain available while clients migrate. v2 has no lazy feed creation or
+item PATCH route.
+
+### Legacy v1 routes
+
 | Method | Route | Authentication | Purpose |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/list` | Basic | List the user's feeds |
+| `GET` | `/api/v1/list` | Basic or Bearer | List the user's feeds |
 | `GET` | `/api/v1/feed_types` | None | List feed types supported by the parser |
 | `GET` | `/api/v1/feed` | Basic | Return the user's RSS feed |
 | `POST` | `/api/v1/add` | Basic | Add a feed |
@@ -81,7 +106,7 @@ Swagger UI is available at `/api/swagger/index.html`.
 | `DELETE` | `/api/v1/delete?id=<id>` | Basic or Bearer | Permanently delete a feed and all its items |
 | `DELETE` | `/api/v1/items/{id}` | Basic or Bearer | Permanently delete an owned item |
 | `POST` | `/api/v1/add_deleted_items` | Basic or Bearer | Deprecated compatibility stub; returns `410 Gone` |
-| `GET` | `/api/v1/get_items` | Basic | Return cursor-paginated items |
+| `GET` | `/api/v1/get_items` | Basic or Bearer | Return cursor-paginated items |
 | `GET` | `/api/v1/item?id=<id>` | Basic or Bearer | Return the authenticated user's item and its feed |
 | `GET` | `/api/v1/auth/me` | Basic or Bearer | Return the authenticated user |
 
@@ -89,6 +114,30 @@ The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing
 clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive
 `401 Unauthorized`.
+
+### Item synchronization
+
+`GET /api/v2/items/sync?limit=100` returns `items`, `next_cursor`, `has_more`, and
+`sync_cursor`. Fetch subsequent pages with `next_cursor` while `has_more` is
+true. The first page fixes an upper item ID and change sequence; later inserts
+cannot shift earlier pages, and deleted items are skipped. Apply changes from
+the first page's `sync_cursor` after finishing the full list to catch mutations
+that happened during paging. Cursors are encrypted, tied to the authenticated
+user, and invalidated when `GKFEED_JWT_SECRET` rotates.
+
+`GET /api/v2/items/changes?cursor=<sync_cursor>&limit=100` returns `upserted`,
+`deleted_ids`, `next_cursor`, and `has_more`. Apply each response before using
+its `next_cursor`; continue immediately while `has_more` is true, then poll
+later with the last cursor. No changes return empty arrays and a valid
+next cursor. Repeated mutations of the same item within one response collapse
+to its last state. Both routes cap `limit` at 500 and reject invalid or
+cross-user cursors with `400`.
+
+The v2 routes require the item change table and triggers from
+[`gkfeed/infra` migration `20260927071753`](https://github.com/gkfeed/infra/blob/master/db/migrations/20260927071753_add_item_changes.sql).
+Apply that migration before deploying this API version. The triggers record
+database writes, including deletes caused by feed deletion. Do not prune the
+change table without a cursor expiry and recovery policy.
 
 Repeated feed creation uses `(user_id, url, type)` as its identity and returns the
 existing feed with `created: false`. The original title remains unchanged.

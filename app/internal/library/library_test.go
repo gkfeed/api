@@ -11,7 +11,8 @@ type fakeFeeds struct {
 	err  error
 }
 
-func (f fakeFeeds) List(context.Context, int) ([]Feed, error) { return f.list, f.err }
+func (f fakeFeeds) List(context.Context, int) ([]Feed, error)   { return f.list, f.err }
+func (f fakeFeeds) Get(context.Context, int, int) (Feed, error) { return Feed{}, f.err }
 func (fakeFeeds) Add(context.Context, int, CreateFeedInput) (AddFeedResult, error) {
 	return AddFeedResult{}, nil
 }
@@ -32,6 +33,12 @@ func (f *fakeItems) ListPage(_ context.Context, _ int, _ *int, limit int) ([]Ite
 	return f.page, nil
 }
 func (f *fakeItems) Delete(context.Context, int, int) error { return nil }
+func (f *fakeItems) SyncPage(context.Context, int, int, int, int) (SyncPage, error) {
+	return SyncPage{}, nil
+}
+func (f *fakeItems) Changes(context.Context, int, int64, int) (ChangesPage, error) {
+	return ChangesPage{}, nil
+}
 
 func TestServiceShapesPagination(t *testing.T) {
 	items := &fakeItems{page: []Item{{ID: 3}, {ID: 2}, {ID: 1}}}

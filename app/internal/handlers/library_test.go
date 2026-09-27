@@ -11,8 +11,11 @@ type fakeLibraryState struct {
 	deleteFeed func(context.Context, int, int) error
 	deleteItem func(context.Context, int, int) error
 	listFeeds  []library.Feed
+	getFeed    func(context.Context, int, int) (library.Feed, error)
 	listItems  []library.Item
 	page       library.Page
+	syncPage   func(context.Context, int, int, int, int) (library.SyncPage, error)
+	changes    func(context.Context, int, int64, int) (library.ChangesPage, error)
 }
 
 type fakeFeedRepository struct{ state *fakeLibraryState }
@@ -50,4 +53,23 @@ func (r fakeItemRepository) Delete(ctx context.Context, userID, itemID int) erro
 
 func newTestLibraryHandler(state *fakeLibraryState, resolver FeedResolver) *LibraryHandler {
 	return NewLibraryHandler(fakeFeedRepository{state}, fakeItemRepository{state}, resolver)
+}
+
+func (r fakeFeedRepository) Get(ctx context.Context, userID, feedID int) (library.Feed, error) {
+	if r.state.getFeed != nil {
+		return r.state.getFeed(ctx, userID, feedID)
+	}
+	return library.Feed{}, library.ErrNotFound
+}
+func (r fakeItemRepository) SyncPage(ctx context.Context, userID, afterID, maxID, limit int) (library.SyncPage, error) {
+	if r.state.syncPage != nil {
+		return r.state.syncPage(ctx, userID, afterID, maxID, limit)
+	}
+	return library.SyncPage{Items: []library.Item{}}, nil
+}
+func (r fakeItemRepository) Changes(ctx context.Context, userID int, sequence int64, limit int) (library.ChangesPage, error) {
+	if r.state.changes != nil {
+		return r.state.changes(ctx, userID, sequence, limit)
+	}
+	return library.ChangesPage{Changes: []library.Change{}}, nil
 }

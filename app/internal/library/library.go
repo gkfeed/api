@@ -42,6 +42,27 @@ type Page struct {
 	NextCursor *int
 }
 
+// SyncPage is anchored to one visible change sequence and item ID ceiling.
+type SyncPage struct {
+	Items    []Item
+	LastID   int
+	MaxID    int
+	Sequence int64
+	HasMore  bool
+}
+
+type Change struct {
+	Sequence int64
+	ItemID   int
+	Item     *Item
+}
+
+type ChangesPage struct {
+	Changes  []Change
+	Sequence int64
+	HasMore  bool
+}
+
 type CreateFeedInput struct {
 	Title string
 	Type  FeedType
@@ -50,6 +71,7 @@ type CreateFeedInput struct {
 
 type FeedRepository interface {
 	List(ctx context.Context, userID int) ([]Feed, error)
+	Get(ctx context.Context, userID, feedID int) (Feed, error)
 	Add(ctx context.Context, userID int, input CreateFeedInput) (AddFeedResult, error)
 	Delete(ctx context.Context, userID, feedID int) error
 }
@@ -59,6 +81,8 @@ type ItemRepository interface {
 	List(ctx context.Context, userID int) ([]Item, error)
 	ListPage(ctx context.Context, userID int, cursor *int, limit int) ([]Item, error)
 	Delete(ctx context.Context, userID, itemID int) error
+	SyncPage(ctx context.Context, userID, afterID, maxID, limit int) (SyncPage, error)
+	Changes(ctx context.Context, userID int, afterSequence int64, limit int) (ChangesPage, error)
 }
 
 type Service struct {
@@ -106,4 +130,12 @@ func (s *Service) ListItemsPage(ctx context.Context, userID int, cursor *int, li
 
 	nextCursor := items[limit-1].ID
 	return Page{Items: items[:limit], NextCursor: &nextCursor}, nil
+}
+
+func (s *Service) SyncItemsPage(ctx context.Context, userID, afterID, maxID, limit int) (SyncPage, error) {
+	return s.items.SyncPage(ctx, userID, afterID, maxID, limit)
+}
+
+func (s *Service) ItemChanges(ctx context.Context, userID int, afterSequence int64, limit int) (ChangesPage, error) {
+	return s.items.Changes(ctx, userID, afterSequence, limit)
 }
