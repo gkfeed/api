@@ -11,8 +11,7 @@ GKFeed is a small Go HTTP API that stores feed subscriptions and items in Postgr
 
 ## Development
 
-Set `GKFEED_DATABASE_URL` to your PostgreSQL application connection URL and
-`GKFEED_JWT_SECRET` to a random secret of at least 32 bytes.
+Set `GKFEED_DATABASE_URL` to your PostgreSQL application connection URL before starting the API.
 
 Do not deploy this branch as an intermediate SQLite release. Before merge or
 deployment, confirm the infra schema and grants, importer completion, sequence
@@ -22,7 +21,10 @@ Infra owns all DDL. Startup only reads `public.schema_migrations` and requires
 `20260904184133_create_canonical_schema` and
 `20260905082946_add_application_roles`, and the item sync migration
 `20260927071753_add_item_changes`. Missing migrations or an unreadable
-registry prevent startup. Later migrations are allowed.
+registry prevent startup. Later migrations are allowed. The API also requires
+the `browser_sessions` schema and application grants described in the
+[browser session contract](docs/browser-sessions.md). Infra must apply that
+migration before deployment; the API does not execute its DDL.
 
 The importer owns legacy password conversion and deleted-item tombstone
 processing. The API never creates tables or migrates legacy data. SQLite is
@@ -32,7 +34,7 @@ used only for local test fixtures.
 make dev
 ```
 
-The API listens on <http://localhost:8086>. Most routes require HTTP Basic authentication using credentials stored in the `users` table. The `hashed_password` column stores PHC-formatted Argon2id hashes; the importer converts legacy plaintext passwords before cutover. A null password is valid for a passwordless user and Basic Auth rejects it with `401 Unauthorized`. Normal password login verifies Argon2id hashes.
+The API listens on <http://localhost:8086>. Browser login uses persistent cookie sessions through `/api/v2/sessions`. The v1 password login returns a short-lived opaque access token and a rotating refresh token. Access tokens are sent as `Authorization: Bearer <token>`; Basic authentication remains available for existing v1 clients. The `hashed_password` column stores PHC-formatted Argon2id hashes; the importer converts legacy plaintext passwords before cutover. Null passwords are valid for passwordless users; Basic Auth rejects them.
 
 Run the local quality checks with:
 
@@ -51,13 +53,14 @@ Configuration is read from environment variables at startup:
 | --- | --- | --- |
 | `GKFEED_ADDRESS` | `:8086` | HTTP server listen address |
 | `GKFEED_DATABASE_URL` | none (required) | PostgreSQL application connection URL |
-| `GKFEED_ALLOWED_ORIGINS` | Localhost development origins | Comma-separated CORS origins |
-| `GKFEED_JWT_SECRET` | none (required) | Cryptographically random JWT signing secret of at least 32 bytes |
+| `GKFEED_ALLOWED_ORIGINS` | Localhost development origins | Comma-separated exact origins for CORS and browser-session mutation checks |
+| `GKFEED_SYNC_CURSOR_SECRET` | Random process-local key | Sync cursor key; accepts `GKFEED_JWT_SECRET` as fallback |
+| `GKFEED_ACCESS_TTL` | `30m` | Access-token lifetime |
+| `GKFEED_JWT_REFRESH_TTL` | `2160h` | Refresh-token idle lifetime |
 
 ## Docker
 
 ```sh
-export GKFEED_JWT_SECRET="$(openssl rand -base64 32)"
 docker compose up --build -d
 ```
 
@@ -98,17 +101,33 @@ item PATCH route.
 
 | Method | Route | Authentication | Purpose |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/list` | Basic or Bearer | List the user's feeds |
+| `GET` | `/api/v1/list` | Basic, Bearer or cookie | List the user's feeds |
 | `GET` | `/api/v1/feed_types` | None | List feed types supported by the parser |
-| `GET` | `/api/v1/feed` | Basic | Return the user's RSS feed |
-| `POST` | `/api/v1/add` | Basic | Add a feed |
-| `POST` | `/api/v1/add_lazy` | Basic | Add a feed inferred from its URL |
-| `DELETE` | `/api/v1/delete?id=<id>` | Basic or Bearer | Permanently delete a feed and all its items |
-| `DELETE` | `/api/v1/items/{id}` | Basic or Bearer | Permanently delete an owned item |
-| `POST` | `/api/v1/add_deleted_items` | Basic or Bearer | Deprecated compatibility stub; returns `410 Gone` |
-| `GET` | `/api/v1/get_items` | Basic or Bearer | Return cursor-paginated items |
-| `GET` | `/api/v1/item?id=<id>` | Basic or Bearer | Return the authenticated user's item and its feed |
-| `GET` | `/api/v1/auth/me` | Basic or Bearer | Return the authenticated user |
+| `GET` | `/api/v1/feed` | Basic, Bearer or cookie | Return the user's RSS feed |
+| `POST` | `/api/v1/add` | Basic, Bearer or cookie | Add a feed |
+| `POST` | `/api/v1/add_lazy` | Basic, Bearer or cookie | Add a feed inferred from its URL |
+| `DELETE` | `/api/v1/delete?id=<id>` | Basic, Bearer or cookie | Permanently delete a feed and all its items |
+| `DELETE` | `/api/v1/items/{id}` | Basic, Bearer or cookie | Permanently delete an owned item |
+| `POST` | `/api/v1/add_deleted_items` | Basic, Bearer or cookie | Deprecated compatibility stub; returns `410 Gone` |
+| `GET` | `/api/v1/get_items` | Basic, Bearer or cookie | Return cursor-paginated items |
+| `GET` | `/api/v1/item?id=<id>` | Basic, Bearer or cookie | Return the authenticated user's item and its feed |
+| `GET` | `/api/v1/auth/me` | Basic, Bearer or cookie | Return the authenticated user |
+| `POST` | `/api/v2/sessions` | Password and allowed Origin | Create a browser session, return user and set cookie |
+| `POST` | `/api/v2/sessions/passkey/begin` | Allowed Origin | Begin browser passkey login |
+| `POST` | `/api/v2/sessions/passkey/finish` | Passkey assertion and allowed Origin | Create the same browser session |
+| `GET` | `/api/v2/me` | Cookie | Restore the current browser user |
+| `DELETE` | `/api/v2/sessions/current` | Allowed Origin, cookie if present | Revoke current browser session and clear cookie |
+| `POST` | `/api/v1/auth/login` | None | Exchange username and password for access and refresh tokens |
+| `POST` | `/api/v1/auth/refresh` | None | Rotate a refresh token and issue a new token pair |
+| `POST` | `/api/v1/auth/logout` | Refresh token | Revoke the refresh-token family |
+| `POST` | `/api/v1/auth/logout-all` | Basic, Bearer or cookie | Revoke all sessions for the authenticated user |
+
+Browser sessions survive API restarts and browser closure. They expire after 30
+days of inactivity, with an absolute limit of 90 days. Unsafe cookie requests
+require an allowed `Origin`. See the [browser session contract](docs/browser-sessions.md)
+for response details, the PostgreSQL prerequisite, and deferred frontend/dev-proxy work.
+
+Refresh token IDs in the infra-owned `refresh_tokens` table contain only SHA-256 token digests and random family IDs. Consumed tokens remain as expired rows so reuse can be detected. Each refresh rotates the token; reusing an old token revokes the entire token family and its access sessions. Access sessions are held in memory, so restarting the API invalidates access tokens while valid refresh tokens can obtain new ones.
 
 The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing
@@ -123,7 +142,12 @@ true. The first page fixes an upper item ID and change sequence; later inserts
 cannot shift earlier pages, and deleted items are skipped. Apply changes from
 the first page's `sync_cursor` after finishing the full list to catch mutations
 that happened during paging. Cursors are encrypted, tied to the authenticated
-user, and invalidated when `GKFEED_JWT_SECRET` rotates.
+user, and invalidated when the sync cursor key rotates. Set
+`GKFEED_SYNC_CURSOR_SECRET` to a random value of at least 32 bytes to keep
+cursors valid across API restarts and instances. The API also accepts the
+existing `GKFEED_JWT_SECRET` as a compatibility fallback for this key. Without
+either variable, startup generates a process-local key; browser sessions still
+survive restart, but sync cursors must be recreated.
 
 `GET /api/v2/items/changes?cursor=<sync_cursor>&limit=100` returns `upserted`,
 `deleted_ids`, `next_cursor`, and `has_more`. Apply each response before using

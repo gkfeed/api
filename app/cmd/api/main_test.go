@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"gkfeed/api/internal/config"
 	"gkfeed/api/internal/db"
@@ -86,6 +88,119 @@ func TestMeRouteAcceptsBasicAuth(t *testing.T) {
 	}
 	if user.ID != 7 || user.Name != "reader" {
 		t.Fatalf("GET /api/v1/auth/me returned %#v; want reader with ID 7", user)
+	}
+}
+
+func TestPasswordLoginRefreshesAndRevokesRotatedSessions(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "db.sqlite")
+	database, err := sql.Open("sqlite3", databasePath)
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer database.Close()
+	database.SetMaxOpenConns(1)
+	db.Configure(database)
+	t.Cleanup(func() { db.Configure(nil) })
+	testschema.Init(t, database)
+	hash, err := passwordhash.HashPassword("secret")
+	if err != nil {
+		t.Fatalf("HashPassword() returned error: %v", err)
+	}
+	if _, err := database.Exec("INSERT INTO users (id, name, hashed_password) VALUES (?, ?, ?)", 1, "reader", hash); err != nil {
+		t.Fatalf("insert test user: %v", err)
+	}
+
+	handler := newHandler(config.Config{
+		AccessTokenTTL:  30 * time.Minute,
+		RefreshTokenTTL: 90 * 24 * time.Hour,
+	})
+	loginRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		strings.NewReader(`{"username":"reader","password":"secret"}`),
+	)
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	if loginResponse.Code != http.StatusOK {
+		t.Fatalf("login returned status %d; want %d", loginResponse.Code, http.StatusOK)
+	}
+	if loginResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("login Cache-Control = %q; want no-store", loginResponse.Header().Get("Cache-Control"))
+	}
+
+	var tokens struct {
+		AccessToken      string `json:"access_token"`
+		RefreshToken     string `json:"refresh_token"`
+		TokenType        string `json:"token_type"`
+		ExpiresIn        int64  `json:"expires_in"`
+		RefreshExpiresIn int64  `json:"refresh_expires_in"`
+	}
+	if err := json.NewDecoder(loginResponse.Body).Decode(&tokens); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("login returned empty tokens: %#v", tokens)
+	}
+	if tokens.TokenType != "Bearer" || tokens.ExpiresIn != 1800 || tokens.RefreshExpiresIn != 7_776_000 {
+		t.Fatalf("login token metadata = %#v", tokens)
+	}
+	var storedRefreshHash string
+	if err := database.QueryRow(
+		"SELECT id FROM refresh_tokens WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP",
+		1,
+	).Scan(&storedRefreshHash); err != nil {
+		t.Fatalf("read stored refresh token hash: %v", err)
+	}
+	if strings.Contains(storedRefreshHash, tokens.RefreshToken) {
+		t.Fatal("database stored the raw refresh token")
+	}
+
+	meRequest := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	meRequest.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	meResponse := httptest.NewRecorder()
+	handler.ServeHTTP(meResponse, meRequest)
+	if meResponse.Code != http.StatusOK {
+		t.Fatalf("authenticated request returned status %d; want %d", meResponse.Code, http.StatusOK)
+	}
+
+	refreshRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/refresh",
+		strings.NewReader(`{"refresh_token":"`+tokens.RefreshToken+`"}`),
+	)
+	refreshResponse := httptest.NewRecorder()
+	handler.ServeHTTP(refreshResponse, refreshRequest)
+	if refreshResponse.Code != http.StatusOK {
+		t.Fatalf("refresh returned status %d; want %d", refreshResponse.Code, http.StatusOK)
+	}
+	var rotated struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(refreshResponse.Body).Decode(&rotated); err != nil {
+		t.Fatalf("decode refresh response: %v", err)
+	}
+	if rotated.AccessToken == "" || rotated.RefreshToken == tokens.RefreshToken {
+		t.Fatalf("refresh did not rotate tokens: %#v", rotated)
+	}
+
+	reuseRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/refresh",
+		strings.NewReader(`{"refresh_token":"`+tokens.RefreshToken+`"}`),
+	)
+	reuseResponse := httptest.NewRecorder()
+	handler.ServeHTTP(reuseResponse, reuseRequest)
+	if reuseResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("reused refresh token returned status %d; want %d", reuseResponse.Code, http.StatusUnauthorized)
+	}
+
+	rotatedMeRequest := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	rotatedMeRequest.Header.Set("Authorization", "Bearer "+rotated.AccessToken)
+	rotatedMeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(rotatedMeResponse, rotatedMeRequest)
+	if rotatedMeResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("access token from revoked family returned status %d; want %d", rotatedMeResponse.Code, http.StatusUnauthorized)
 	}
 }
 

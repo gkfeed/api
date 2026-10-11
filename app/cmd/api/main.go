@@ -44,6 +44,10 @@ var testPasskeyHTML string
 // @in                         header
 // @name                       Authorization
 
+// @securityDefinitions.apikey BrowserSession
+// @in                         header
+// @name                       Cookie
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -72,6 +76,9 @@ func run() error {
 	defer db.Configure(nil)
 
 	if err := storage.CheckSchema(startupCtx, database); err != nil {
+		return err
+	}
+	if err := db.CheckBrowserSessionSchema(startupCtx); err != nil {
 		return err
 	}
 	libraryHandler := buildLibraryHandler(database)
@@ -123,7 +130,12 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{})
 	}
 	router := mux.NewRouter()
-	authenticate := auth.Authenticate(configuration)
+	sessions := auth.NewSessionStore(configuration.EffectiveAccessTokenTTL())
+	browserSessions := auth.NewBrowserSessionStore(configuration.AllowedOrigins)
+	legacyAuthenticate := auth.Authenticate(sessions)
+	authenticate := func(handler http.HandlerFunc) http.HandlerFunc {
+		return browserSessions.WithFallback(handler, legacyAuthenticate(handler))
+	}
 
 	router.PathPrefix("/api/swagger/").Handler(httpSwagger.Handler(
 		httpSwagger.URL("doc.json"),
@@ -146,7 +158,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	api.HandleFunc("/get_items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
 	api.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
 
-	syncHandler := libraryHandler.SyncHandler(configuration.JWTSecret)
+	syncHandler := libraryHandler.SyncHandler(configuration.SyncCursorSecret)
 	v2 := router.PathPrefix("/api/v2").Subrouter()
 	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListOfFeeds)).Methods(http.MethodGet)
 	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
@@ -161,22 +173,44 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	authRouter := api.PathPrefix("/auth").Subrouter()
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
 
+	authHandler := handlers.NewAuthHandlerWithSessions(configuration, nil, sessions)
+	authRouter.HandleFunc("/login", authHandler.Login).Methods(http.MethodPost)
+	authRouter.HandleFunc("/refresh", authHandler.Refresh).Methods(http.MethodPost)
+	authRouter.HandleFunc("/logout", authHandler.Logout).Methods(http.MethodPost)
+	authRouter.HandleFunc("/logout-all", authenticate(authHandler.LogoutAll)).Methods(http.MethodPost)
+
 	if webAuthnService, err := auth.NewWebAuthnService(configuration); err == nil {
-		authHandler := handlers.NewAuthHandler(configuration, webAuthnService)
+		authHandler = handlers.NewAuthHandlerWithSessions(configuration, webAuthnService, sessions)
 
 		authRouter.HandleFunc("/register/begin", authenticate(authHandler.BeginRegistration)).Methods(http.MethodPost)
 		authRouter.HandleFunc("/register/finish", authenticate(authHandler.FinishRegistration)).Methods(http.MethodPost)
 		authRouter.HandleFunc("/login/begin", authHandler.BeginLogin).Methods(http.MethodPost)
 		authRouter.HandleFunc("/login/finish", authHandler.FinishLogin).Methods(http.MethodPost)
-		authRouter.HandleFunc("/refresh", authHandler.Refresh).Methods(http.MethodPost)
-		authRouter.HandleFunc("/logout", authenticate(authHandler.Logout)).Methods(http.MethodPost)
 		authRouter.HandleFunc("/credentials", authenticate(authHandler.ListCredentials)).Methods(http.MethodGet)
 		authRouter.HandleFunc("/credentials/{id}", authenticate(authHandler.DeleteCredential)).Methods(http.MethodDelete)
+	}
+
+	v2.HandleFunc("/sessions", browserSessions.RequireOrigin(authHandler.CreateBrowserSession)).Methods(http.MethodPost)
+	v2.HandleFunc("/me", browserSessions.Authenticate(authHandler.BrowserMe)).Methods(http.MethodGet)
+	v2.HandleFunc("/sessions/current", browserSessions.RequireOrigin(authHandler.DeleteBrowserSession)).Methods(http.MethodDelete)
+	v2.HandleFunc("/sessions/passkey/begin", browserSessions.RequireOrigin(authHandler.BeginBrowserLogin)).Methods(http.MethodPost)
+	v2.HandleFunc("/sessions/passkey/finish", browserSessions.RequireOrigin(authHandler.FinishBrowserLogin)).Methods(http.MethodPost)
+
+	// Explicit path fallbacks preserve 405 after later routes are registered.
+	// Gorilla mux subrouter matching can otherwise discard a method mismatch.
+	for _, path := range []string{
+		"/feeds", "/feeds/{id}", "/items", "/items/sync", "/items/changes", "/items/{id}",
+		"/sessions", "/me", "/sessions/current", "/sessions/passkey/begin", "/sessions/passkey/finish",
+	} {
+		v2.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		})
 	}
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   configuration.AllowedOrigins,
 		AllowedHeaders:   []string{"*"},
+		AllowedMethods:   []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodDelete},
 		AllowCredentials: true,
 	}).Handler(router)
 

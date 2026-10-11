@@ -203,36 +203,29 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "allOf": [
-                                    {
-                                        "type": "object"
+                                "type": "object",
+                                "properties": {
+                                    "created_at": {
+                                        "type": "string"
                                     },
-                                    {
-                                        "type": "object",
-                                        "properties": {
-                                            "created_at": {
-                                                "type": "string"
-                                            },
-                                            "id": {
-                                                "type": "string"
-                                            },
-                                            "last_used_at": {
-                                                "type": "string"
-                                            },
-                                            "name": {
-                                                "type": "string"
-                                            }
-                                        }
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "last_used_at": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
                                     }
-                                ]
+                                }
                             }
                         }
                     },
                     "401": {
-                        "description": ""
+                        "description": "Unauthorized"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
@@ -263,19 +256,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "No Content"
                     },
                     "400": {
-                        "description": ""
+                        "description": "Bad Request"
                     },
                     "401": {
-                        "description": ""
+                        "description": "Unauthorized"
                     },
                     "404": {
-                        "description": ""
+                        "description": "Not Found"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
@@ -292,17 +285,17 @@ const docTemplate = `{
                 "summary": "Begin passkey login",
                 "responses": {
                     "200": {
-                        "description": ""
+                        "description": "OK"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
         },
         "/api/v1/auth/login/finish": {
             "post": {
-                "description": "Completes WebAuthn authentication, returns a JWT access/refresh token pair.",
+                "description": "Completes WebAuthn authentication, returns an access/refresh token pair.",
                 "consumes": [
                     "application/json"
                 ],
@@ -328,60 +321,62 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "type": "object"
+                            "type": "object",
+                            "properties": {
+                                "access_token": {
+                                    "type": "string"
                                 },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "access_token": {
-                                            "type": "string"
-                                        },
-                                        "credential_id": {
-                                            "type": "string"
-                                        },
-                                        "refresh_token": {
-                                            "type": "string"
-                                        }
-                                    }
+                                "credential_id": {
+                                    "type": "string"
+                                },
+                                "refresh_token": {
+                                    "type": "string"
                                 }
-                            ]
+                            }
                         }
                     },
                     "400": {
-                        "description": ""
+                        "description": "Bad Request"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
         },
         "/api/v1/auth/logout": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    },
-                    {
-                        "BearerAuth": []
-                    }
+                "description": "Revokes the refresh-token family associated with the supplied token.",
+                "consumes": [
+                    "application/json"
                 ],
-                "description": "Invalidates all refresh tokens for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "auth"
                 ],
                 "summary": "Logout",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.refreshRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "No Content"
                     },
-                    "401": {
-                        "description": ""
+                    "400": {
+                        "description": "Bad Request"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
@@ -408,33 +403,26 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "type": "object"
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "integer"
                                 },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {
-                                            "type": "integer"
-                                        },
-                                        "name": {
-                                            "type": "string"
-                                        }
-                                    }
+                                "name": {
+                                    "type": "string"
                                 }
-                            ]
+                            }
                         }
                     },
                     "401": {
-                        "description": ""
+                        "description": "Unauthorized"
                     }
                 }
             }
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "Exchanges a valid refresh token for a new access/refresh token pair. Old refresh token is invalidated.",
+                "description": "Rotates a refresh token and returns a new access/refresh token pair.",
                 "consumes": [
                     "application/json"
                 ],
@@ -460,32 +448,17 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "type": "object"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "access_token": {
-                                            "type": "string"
-                                        },
-                                        "refresh_token": {
-                                            "type": "string"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/handlers.tokenResponse"
                         }
                     },
                     "400": {
-                        "description": ""
+                        "description": "Bad Request"
                     },
                     "401": {
-                        "description": ""
+                        "description": "Unauthorized"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
@@ -523,13 +496,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": ""
+                        "description": "OK"
                     },
                     "401": {
-                        "description": ""
+                        "description": "Unauthorized"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
@@ -570,32 +543,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "type": "object"
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string"
                                 },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {
-                                            "type": "string"
-                                        },
-                                        "name": {
-                                            "type": "string"
-                                        }
-                                    }
+                                "name": {
+                                    "type": "string"
                                 }
-                            ]
+                            }
                         }
                     },
                     "400": {
-                        "description": ""
+                        "description": "Bad Request"
                     },
                     "401": {
-                        "description": ""
+                        "description": "Unauthorized"
                     },
                     "500": {
-                        "description": ""
+                        "description": "Internal Server Error"
                     }
                 }
             }
@@ -1311,6 +1277,241 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/v1/auth/login": {
+            "post": {
+                "description": "Exchanges username and password for a short-lived access token and a rotating refresh token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login with a password",
+                "parameters": [
+                    {
+                        "description": "Credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.tokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout-all": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revokes every refresh token and access session for the authenticated user.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout all sessions",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/me": {
+            "get": {
+                "security": [
+                    {
+                        "BrowserSession": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Current browser user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Create browser session with a password",
+                "parameters": [
+                    {
+                        "description": "Credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions/current": {
+            "delete": {
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Revoke current browser session",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions/passkey/begin": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Begin browser passkey login",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "503": {
+                        "description": "Service Unavailable"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions/passkey/finish": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Finish browser passkey login",
+                "parameters": [
+                    {
+                        "description": "WebAuthn assertion response",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    },
+                    "503": {
+                        "description": "Service Unavailable"
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1465,6 +1666,48 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "handlers.loginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.tokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.User": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
         }
     },
     "securityDefinitions": {
@@ -1474,6 +1717,11 @@ const docTemplate = `{
         "BearerAuth": {
             "type": "apiKey",
             "name": "Authorization",
+            "in": "header"
+        },
+        "BrowserSession": {
+            "type": "apiKey",
+            "name": "Cookie",
             "in": "header"
         }
     }

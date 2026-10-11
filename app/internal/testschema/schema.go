@@ -17,6 +17,7 @@ func Init(t *testing.T, db *sql.DB) {
 		`CREATE TRIGGER item_delete_change AFTER DELETE ON item BEGIN INSERT INTO item_changes (user_id, item_id) SELECT user_id, OLD.id FROM feed WHERE id = OLD.feed_id; END`,
 		`CREATE TRIGGER item_update_change AFTER UPDATE ON item BEGIN INSERT INTO item_changes (user_id, item_id, payload) SELECT user_id, NEW.id, json_object('ID', NEW.id, 'FeedID', NEW.feed_id, 'Title', NEW.title, 'Text', NEW.text, 'Date', strftime('%Y-%m-%dT%H:%M:%SZ', NEW.date), 'Link', NEW.link) FROM feed WHERE id = NEW.feed_id; END`,
 		"CREATE TABLE webauthn_credentials (id BLOB PRIMARY KEY, user_id INTEGER NOT NULL, credential TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, last_used_at DATETIME)",
+		"CREATE TABLE browser_sessions (token_hash BLOB PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), created_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL, expires_at DATETIME NOT NULL)",
 		"CREATE TABLE refresh_tokens (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at DATETIME NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
 	} {
 		if _, err := db.Exec(statement); err != nil {

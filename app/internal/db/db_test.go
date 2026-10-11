@@ -22,6 +22,9 @@ func useTestDatabase(t *testing.T) *sql.DB {
 		database.Close()
 	})
 	testschema.Init(t, database)
+	if _, err := database.Exec("INSERT INTO users (id, name, hashed_password) VALUES (1, 'reader', 'secret')"); err != nil {
+		t.Fatal(err)
+	}
 	return database
 }
 
