@@ -907,6 +907,170 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/v2/me": {
+            "get": {
+                "security": [
+                    {
+                        "BrowserSession": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Current browser user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Create browser session with a password",
+                "parameters": [
+                    {
+                        "description": "Credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions/current": {
+            "delete": {
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Revoke current browser session",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions/passkey/begin": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Begin browser passkey login",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "503": {
+                        "description": "Service Unavailable"
+                    }
+                }
+            }
+        },
+        "/api/v2/sessions/passkey/finish": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "browser sessions"
+                ],
+                "summary": "Finish browser passkey login",
+                "parameters": [
+                    {
+                        "description": "WebAuthn assertion response",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    },
+                    "503": {
+                        "description": "Service Unavailable"
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1038,6 +1202,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "models.User": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
         }
     },
     "securityDefinitions": {
@@ -1047,6 +1222,11 @@ const docTemplate = `{
         "BearerAuth": {
             "type": "apiKey",
             "name": "Authorization",
+            "in": "header"
+        },
+        "BrowserSession": {
+            "type": "apiKey",
+            "name": "Cookie",
             "in": "header"
         }
     }

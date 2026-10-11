@@ -9,6 +9,7 @@ type AuthHandler struct {
 	cfg             config.Config
 	webAuthnService *auth.WebAuthnService
 	sessions        *auth.SessionStore
+	browserSessions *auth.BrowserSessionStore
 }
 
 func NewAuthHandler(cfg config.Config, webAuthnService *auth.WebAuthnService) *AuthHandler {
@@ -23,5 +24,5 @@ func NewAuthHandlerWithSessions(
 	if sessions == nil {
 		sessions = auth.NewSessionStore(cfg.EffectiveAccessTokenTTL())
 	}
-	return &AuthHandler{cfg: cfg, webAuthnService: webAuthnService, sessions: sessions}
+	return &AuthHandler{cfg: cfg, webAuthnService: webAuthnService, sessions: sessions, browserSessions: auth.NewBrowserSessionStore(cfg.AllowedOrigins)}
 }

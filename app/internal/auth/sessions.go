@@ -28,9 +28,10 @@ type Session struct {
 // SessionStore keeps short-lived access tokens out of the database. A
 // refresh-token family can revoke all access tokens issued for that family.
 type SessionStore struct {
-	mu       sync.Mutex
-	ttl      time.Duration
-	sessions map[string]Session
+	lifecycleMu sync.Mutex
+	mu          sync.Mutex
+	ttl         time.Duration
+	sessions    map[string]Session
 }
 
 func NewSessionStore(ttl time.Duration) *SessionStore {
@@ -38,6 +39,14 @@ func NewSessionStore(ttl time.Duration) *SessionStore {
 		ttl:      ttl,
 		sessions: make(map[string]Session),
 	}
+}
+
+// LockLifecycle orders database token changes and their in-memory effects.
+// Every handler sharing this store uses it through commit and publication.
+// It is separate from mu so Add/Get/Revoke can run while it is held.
+func (s *SessionStore) LockLifecycle() func() {
+	s.lifecycleMu.Lock()
+	return s.lifecycleMu.Unlock
 }
 
 // Create creates an opaque access token and associates it with a refresh-token

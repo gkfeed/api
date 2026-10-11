@@ -82,6 +82,13 @@ definitions:
       token_type:
         type: string
     type: object
+  models.User:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
 info:
   contact:
     name: GKFeed
@@ -645,11 +652,119 @@ paths:
       summary: List feeds
       tags:
       - feeds
+  /api/v2/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+      security:
+      - BrowserSession: []
+      summary: Current browser user
+      tags:
+      - browser sessions
+  /api/v2/sessions:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.loginRequest'
+      produces:
+      - application/json
+      responses:
+        '201':
+          description: Created
+          schema:
+            $ref: '#/definitions/models.User'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+      summary: Create browser session with a password
+      tags:
+      - browser sessions
+  /api/v2/sessions/current:
+    delete:
+      responses:
+        '204':
+          description: No Content
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+      summary: Revoke current browser session
+      tags:
+      - browser sessions
+  /api/v2/sessions/passkey/begin:
+    post:
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: Forbidden
+        '503':
+          description: Service Unavailable
+      summary: Begin browser passkey login
+      tags:
+      - browser sessions
+  /api/v2/sessions/passkey/finish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: WebAuthn assertion response
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        '201':
+          description: Created
+          schema:
+            $ref: '#/definitions/models.User'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+        '503':
+          description: Service Unavailable
+      summary: Finish browser passkey login
+      tags:
+      - browser sessions
 securityDefinitions:
   BasicAuth:
     type: basic
   BearerAuth:
     in: header
     name: Authorization
+    type: apiKey
+  BrowserSession:
+    in: header
+    name: Cookie
     type: apiKey
 swagger: "2.0"

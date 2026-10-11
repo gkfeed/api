@@ -13,6 +13,7 @@ func Init(t *testing.T, db *sql.DB) {
 		"CREATE TABLE feed (id INTEGER PRIMARY KEY, title TEXT, url TEXT NOT NULL, type TEXT NOT NULL, user_id INTEGER NOT NULL, UNIQUE(user_id, url, type))",
 		"CREATE TABLE item (id INTEGER PRIMARY KEY, feed_id INTEGER, title TEXT, text TEXT, date DATETIME, link TEXT)",
 		"CREATE TABLE webauthn_credentials (id BLOB PRIMARY KEY, user_id INTEGER NOT NULL, credential TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, last_used_at DATETIME)",
+		"CREATE TABLE browser_sessions (token_hash BLOB PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), created_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL, expires_at DATETIME NOT NULL)",
 		"CREATE TABLE refresh_tokens (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at DATETIME NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
 	} {
 		if _, err := db.Exec(statement); err != nil {

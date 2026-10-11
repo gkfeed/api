@@ -24,6 +24,8 @@ type tokenResponse struct {
 }
 
 func (h *AuthHandler) issueTokenPair(user models.User) (tokenResponse, error) {
+	unlock := h.sessions.LockLifecycle()
+	defer unlock()
 	accessToken, err := auth.GenerateOpaqueToken()
 	if err != nil {
 		return tokenResponse{}, err
@@ -93,17 +95,24 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
-	rotation, err := db.RotateAuthRefreshToken(
-		auth.DigestToken(req.RefreshToken),
-		auth.DigestToken(newRefreshToken),
-		now,
-		now.Add(h.cfg.EffectiveRefreshTokenTTL()),
-	)
-	if err != nil {
-		if errors.Is(err, db.ErrInvalidRefreshToken) || errors.Is(err, db.ErrRefreshTokenReuse) {
-			if len(rotation.FamilyID) > 0 {
+	err = func() error {
+		unlock := h.sessions.LockLifecycle()
+		defer unlock()
+		rotation, err := db.RotateAuthRefreshToken(
+			auth.DigestToken(req.RefreshToken), auth.DigestToken(newRefreshToken),
+			now, now.Add(h.cfg.EffectiveRefreshTokenTTL()),
+		)
+		if err != nil {
+			if (errors.Is(err, db.ErrInvalidRefreshToken) || errors.Is(err, db.ErrRefreshTokenReuse)) && len(rotation.FamilyID) > 0 {
 				h.sessions.RevokeFamily(rotation.FamilyID)
 			}
+			return err
+		}
+		h.sessions.Add(accessToken, rotation.User, rotation.FamilyID)
+		return nil
+	}()
+	if err != nil {
+		if errors.Is(err, db.ErrInvalidRefreshToken) || errors.Is(err, db.ErrRefreshTokenReuse) {
 			writeBearerUnauthorized(w)
 			return
 		}
@@ -111,7 +120,6 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.sessions.Add(accessToken, rotation.User, rotation.FamilyID)
 	writeJSON(w, h.tokenResponse(accessToken, newRefreshToken))
 }
 
@@ -137,7 +145,16 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	familyID, err := db.RevokeAuthRefreshToken(auth.DigestToken(req.RefreshToken), time.Now())
+	err := func() error {
+		unlock := h.sessions.LockLifecycle()
+		defer unlock()
+		familyID, err := db.RevokeAuthRefreshToken(auth.DigestToken(req.RefreshToken), time.Now())
+		if err != nil {
+			return err
+		}
+		h.sessions.RevokeFamily(familyID)
+		return nil
+	}()
 	if err != nil {
 		if errors.Is(err, db.ErrInvalidRefreshToken) {
 			w.WriteHeader(http.StatusNoContent)
@@ -146,7 +163,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		writeInternalServerError(w, fmt.Errorf("revoke refresh token: %w", err))
 		return
 	}
-	h.sessions.RevokeFamily(familyID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -165,11 +181,23 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := db.RevokeUserAuthRefreshTokens(user.ID, time.Now()); err != nil {
-		writeInternalServerError(w, fmt.Errorf("revoke user refresh tokens: %w", err))
+	err := func() error {
+		unlock := h.sessions.LockLifecycle()
+		defer unlock()
+		if err := db.RevokeUserAuthRefreshTokens(user.ID, time.Now()); err != nil {
+			return fmt.Errorf("revoke user refresh tokens: %w", err)
+		}
+		h.sessions.RevokeUser(user.ID)
+		if err := db.DeleteUserBrowserSessions(r.Context(), user.ID); err != nil {
+			return fmt.Errorf("revoke user browser sessions: %w", err)
+		}
+		return nil
+	}()
+	if err != nil {
+		writeInternalServerError(w, err)
 		return
 	}
-	h.sessions.RevokeUser(user.ID)
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusNoContent)
 }
 

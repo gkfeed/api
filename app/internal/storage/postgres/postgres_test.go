@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -146,5 +147,39 @@ func TestPostgresAuthContract(t *testing.T) {
 	// The application role must not acquire schema ownership.
 	if _, err := app.Exec("CREATE TABLE forbidden (id integer)"); err == nil {
 		t.Fatal("application role can create tables")
+	}
+}
+
+func TestPostgresBrowserSessionContract(t *testing.T) {
+	_, app := postgresFixture(t)
+	db.Configure(app)
+	t.Cleanup(func() { db.Configure(nil) })
+	if err := db.CheckBrowserSessionSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	hash := auth.DigestToken("browser-contract-session")
+	expiry := now.Add(auth.BrowserSessionMaxTTL)
+	if err := db.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
+		t.Fatal(err)
+	}
+	user, actualExpiry, err := db.TouchBrowserSession(t.Context(), hash, now.Add(time.Hour), auth.BrowserSessionIdleTTL)
+	if err != nil || user.ID != 1 || !actualExpiry.Truncate(time.Microsecond).Equal(expiry.Truncate(time.Microsecond)) {
+		t.Fatalf("browser session = %#v, %v, %v", user, actualExpiry, err)
+	}
+	if err := db.DeleteBrowserSession(t.Context(), hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.TouchBrowserSession(t.Context(), hash, now.Add(2*time.Hour), auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
+		t.Fatalf("deleted browser session = %v", err)
+	}
+	if err := db.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteUserBrowserSessions(t.Context(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.TouchBrowserSession(t.Context(), hash, now, auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
+		t.Fatalf("logout-all browser session = %v", err)
 	}
 }
