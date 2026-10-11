@@ -7,7 +7,7 @@
             "name": "GKFeed",
             "url": "https://github.com/gkfeed/api-go"
         },
-        "version": "1.0"
+        "version": "2.0"
     },
     "paths": {
         "/api/v1/add": {
@@ -50,13 +50,13 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "500": {
-                        "description": "Internal Server Error"
+                        "description": ""
                     }
                 }
             }
@@ -81,20 +81,27 @@
                 "summary": "Deprecated item hide endpoint",
                 "responses": {
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "410": {
                         "description": "Gone",
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "error": {
-                                    "type": "string"
+                            "allOf": [
+                                {
+                                    "type": "object"
                                 },
-                                "replacement": {
-                                    "type": "string"
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "string"
+                                        },
+                                        "replacement": {
+                                            "type": "string"
+                                        }
+                                    }
                                 }
-                            }
+                            ]
                         }
                     }
                 }
@@ -128,12 +135,19 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "url": {
-                                    "type": "string"
+                            "allOf": [
+                                {
+                                    "type": "object"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "url": {
+                                            "type": "string"
+                                        }
+                                    }
                                 }
-                            }
+                            ]
                         }
                     }
                 ],
@@ -145,13 +159,13 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "500": {
-                        "description": "Internal Server Error"
+                        "description": ""
                     }
                 }
             }
@@ -243,49 +257,6 @@
                     },
                     "404": {
                         "description": "Not Found"
-                    },
-                    "500": {
-                        "description": "Internal Server Error"
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/login": {
-            "post": {
-                "description": "Exchanges username and password for a short-lived access token and a rotating refresh token.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "Login with a password",
-                "parameters": [
-                    {
-                        "description": "Credentials",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.loginRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.tokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request"
-                    },
-                    "401": {
-                        "description": "Unauthorized"
                     },
                     "500": {
                         "description": "Internal Server Error"
@@ -394,34 +365,6 @@
                     },
                     "400": {
                         "description": "Bad Request"
-                    },
-                    "500": {
-                        "description": "Internal Server Error"
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/logout-all": {
-            "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    },
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Revokes every refresh token and access session for the authenticated user.",
-                "tags": [
-                    "auth"
-                ],
-                "summary": "Logout all sessions",
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "401": {
-                        "description": "Unauthorized"
                     },
                     "500": {
                         "description": "Internal Server Error"
@@ -643,19 +586,19 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": "No Content"
+                        "description": ""
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "404": {
-                        "description": "Not Found"
+                        "description": ""
                     },
                     "500": {
-                        "description": "Internal Server Error"
+                        "description": ""
                     }
                 }
             }
@@ -680,13 +623,13 @@
                 "summary": "Get RSS feed",
                 "responses": {
                     "200": {
-                        "description": "OK"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "500": {
-                        "description": "Internal Server Error"
+                        "description": ""
                     }
                 }
             }
@@ -754,13 +697,13 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "500": {
-                        "description": "Internal Server Error"
+                        "description": ""
                     }
                 }
             }
@@ -796,25 +739,32 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "feed": {
+                            "allOf": [
+                                {
                                     "type": "object"
                                 },
-                                "item": {
-                                    "type": "object"
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "feed": {
+                                            "type": "object"
+                                        },
+                                        "item": {
+                                            "type": "object"
+                                        }
+                                    }
                                 }
-                            }
+                            ]
                         }
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "404": {
-                        "description": "Not Found"
+                        "description": ""
                     }
                 }
             }
@@ -845,19 +795,19 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": "No Content"
+                        "description": ""
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": ""
                     },
                     "401": {
-                        "description": "Unauthorized"
+                        "description": ""
                     },
                     "404": {
-                        "description": "Not Found"
+                        "description": ""
                     },
                     "500": {
-                        "description": "Internal Server Error"
+                        "description": ""
                     }
                 }
             }
@@ -889,6 +839,497 @@
                                 "type": "object"
                             }
                         }
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/feeds": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all feeds for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "List feeds",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a feed with explicit title, type, and URL. Repeated creation returns the existing feed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Create feed",
+                "parameters": [
+                    {
+                        "description": "Feed to create (title, type, url required)",
+                        "name": "feed",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createFeedDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.feedMutationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/feeds/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a feed owned by the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Get feed by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Feed ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.feedDTO"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "404": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a feed and all its items. Only the owner can delete it.",
+                "tags": [
+                    "feeds"
+                ],
+                "summary": "Delete feed by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Feed ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "404": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/items": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns paginated items for the authenticated user. Supports cursor-based pagination.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "items"
+                ],
+                "summary": "Get items",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor (item ID)",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.getItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/items/changes": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns item mutations after a sync cursor. Apply each response before using its next cursor.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "items"
+                ],
+                "summary": "Get item changes",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Changes per page (default 100, maximum 500)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque sync cursor",
+                        "name": "cursor",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.itemChangesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/items/sync": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a bounded item page and a sync cursor for later changes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "items"
+                ],
+                "summary": "List items for synchronization",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default 100, maximum 500)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque page cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.syncItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/items/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns an item and its parent feed for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "items"
+                ],
+                "summary": "Get item by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Item ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.getItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "404": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes an item owned by the authenticated user.",
+                "tags": [
+                    "items"
+                ],
+                "summary": "Delete item",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Item ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    },
+                    "400": {
+                        "description": ""
+                    },
+                    "401": {
+                        "description": ""
+                    },
+                    "404": {
+                        "description": ""
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/login": {
+            "post": {
+                "description": "Exchanges username and password for a short-lived access token and a rotating refresh token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login with a password",
+                "parameters": [
+                    {
+                        "description": "Credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.tokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout-all": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revokes every refresh token and access session for the authenticated user.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout all sessions",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
                     "401": {
                         "description": "Unauthorized"
@@ -1110,6 +1551,17 @@
                 }
             }
         },
+        "handlers.getItemResponse": {
+            "type": "object",
+            "properties": {
+                "feed": {
+                    "$ref": "#/definitions/handlers.feedDTO"
+                },
+                "item": {
+                    "$ref": "#/definitions/handlers.itemDTO"
+                }
+            }
+        },
         "handlers.getItemsResponse": {
             "type": "object",
             "properties": {
@@ -1121,6 +1573,29 @@
                 },
                 "next_cursor": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.itemChangesResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "upserted": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.itemDTO"
+                    }
                 }
             }
         },
@@ -1147,17 +1622,6 @@
                 }
             }
         },
-        "handlers.loginRequest": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.refreshRequest": {
             "type": "object",
             "properties": {
@@ -1170,6 +1634,37 @@
             "type": "object",
             "properties": {
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.syncItemsResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.itemDTO"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "sync_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.loginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

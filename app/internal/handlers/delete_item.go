@@ -14,6 +14,7 @@ import "net/http"
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/items/{id} [delete]
+// @Router       /api/v2/items/{id} [delete]
 func (h *LibraryHandler) HandleDeleteItem(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
@@ -23,7 +24,7 @@ func (h *LibraryHandler) HandleDeleteItem(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	if err := h.service.DeleteItem(r.Context(), user.ID, id); err != nil {
+	if err := h.items.Delete(r.Context(), user.ID, id); err != nil {
 		writeLibraryError(w, err)
 		return
 	}

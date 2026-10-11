@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"net/http"
-
-	"gkfeed/api/internal/library"
 )
 
 type feedMutationResponse struct {
@@ -24,7 +22,7 @@ type feedMutationResponse struct {
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/add_lazy [post]
-func (h *LibraryHandler) HandleAddFeedLazy(w http.ResponseWriter, r *http.Request) {
+func (h *LibraryHandler) HandleAddFeedByURL(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {
 		return
@@ -43,9 +41,7 @@ func (h *LibraryHandler) HandleAddFeedLazy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	feed, err := h.service.AddFeed(r.Context(), user.ID, library.CreateFeedInput{
-		Title: feedInput.Title, Type: feedInput.Type, URL: feedInput.URL,
-	})
+	feed, err := h.feeds.Add(r.Context(), user.ID, feedInput)
 	if err != nil {
 		writeInternalServerError(w, err)
 		return

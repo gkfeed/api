@@ -32,7 +32,7 @@ import (
 var testPasskeyHTML string
 
 // @title           GKFeed API
-// @version         1.0
+// @version         2.0
 // @description     RSS feed aggregator with passkey authentication.
 
 // @contact.name   GKFeed
@@ -115,8 +115,9 @@ func run() error {
 }
 
 func buildLibraryHandler(database *sql.DB) *handlers.LibraryHandler {
-	service := library.NewService(storage.NewFeedRepository(database), storage.NewItemRepository(database))
-	return handlers.NewLibraryHandler(service, services.FeedResolver{})
+	feeds := storage.NewFeedRepository(database)
+	items := storage.NewItemRepository(database)
+	return handlers.NewLibraryHandler(feeds, items, services.FeedResolver{})
 }
 
 func newHandler(configuration config.Config, provided ...*handlers.LibraryHandler) http.Handler {
@@ -126,7 +127,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	} else if database, err := db.ConfiguredDB(); err == nil {
 		libraryHandler = buildLibraryHandler(database)
 	} else {
-		libraryHandler = handlers.NewLibraryHandler(unavailableLibraryService{}, services.FeedResolver{})
+		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{})
 	}
 	router := mux.NewRouter()
 	sessions := auth.NewSessionStore(configuration.EffectiveAccessTokenTTL())
@@ -151,11 +152,23 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	api.HandleFunc("/feed", authenticate(libraryHandler.HandleRSSFeed)).Methods(http.MethodGet)
 	api.HandleFunc("/add", authenticate(libraryHandler.HandleAddFeed)).Methods(http.MethodPost)
 	api.HandleFunc("/delete", authenticate(libraryHandler.HandleDeleteFeed)).Methods(http.MethodDelete)
-	api.HandleFunc("/add_lazy", authenticate(libraryHandler.HandleAddFeedLazy)).Methods(http.MethodPost)
+	api.HandleFunc("/add_lazy", authenticate(libraryHandler.HandleAddFeedByURL)).Methods(http.MethodPost)
 	api.HandleFunc("/add_deleted_items", authenticate(libraryHandler.HandleAddDeletedItems)).Methods(http.MethodPost)
 	api.HandleFunc("/item", authenticate(libraryHandler.HandleGetItemByID)).Methods(http.MethodGet)
 	api.HandleFunc("/get_items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
 	api.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
+
+	syncHandler := libraryHandler.SyncHandler(configuration.SyncCursorSecret)
+	v2 := router.PathPrefix("/api/v2").Subrouter()
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListOfFeeds)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
+	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleGetFeed)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleDeleteFeedByID)).Methods(http.MethodDelete)
+	v2.HandleFunc("/items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/sync", authenticate(syncHandler.HandleItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/changes", authenticate(syncHandler.HandleChanges)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleGetItemByPathID)).Methods(http.MethodGet)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
 
 	authRouter := api.PathPrefix("/auth").Subrouter()
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
@@ -177,12 +190,22 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 		authRouter.HandleFunc("/credentials/{id}", authenticate(authHandler.DeleteCredential)).Methods(http.MethodDelete)
 	}
 
-	v2 := router.PathPrefix("/api/v2").Subrouter()
 	v2.HandleFunc("/sessions", browserSessions.RequireOrigin(authHandler.CreateBrowserSession)).Methods(http.MethodPost)
 	v2.HandleFunc("/me", browserSessions.Authenticate(authHandler.BrowserMe)).Methods(http.MethodGet)
 	v2.HandleFunc("/sessions/current", browserSessions.RequireOrigin(authHandler.DeleteBrowserSession)).Methods(http.MethodDelete)
 	v2.HandleFunc("/sessions/passkey/begin", browserSessions.RequireOrigin(authHandler.BeginBrowserLogin)).Methods(http.MethodPost)
 	v2.HandleFunc("/sessions/passkey/finish", browserSessions.RequireOrigin(authHandler.FinishBrowserLogin)).Methods(http.MethodPost)
+
+	// Explicit path fallbacks preserve 405 after later routes are registered.
+	// Gorilla mux subrouter matching can otherwise discard a method mismatch.
+	for _, path := range []string{
+		"/feeds", "/feeds/{id}", "/items", "/items/sync", "/items/changes", "/items/{id}",
+		"/sessions", "/me", "/sessions/current", "/sessions/passkey/begin", "/sessions/passkey/finish",
+	} {
+		v2.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		})
+	}
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   configuration.AllowedOrigins,
@@ -194,26 +217,39 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	return corsHandler
 }
 
-type unavailableLibraryService struct{}
+type unavailableFeeds struct{}
 
-func (unavailableLibraryService) ListFeeds(context.Context, int) ([]library.Feed, error) {
+func (unavailableFeeds) List(context.Context, int) ([]library.Feed, error) {
 	return nil, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) AddFeed(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
+func (unavailableFeeds) Add(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
 	return library.AddFeedResult{}, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) DeleteFeed(context.Context, int, int) error {
+func (unavailableFeeds) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) GetItem(context.Context, int, int) (library.ItemDetails, error) {
+
+type unavailableItems struct{}
+
+func (unavailableItems) Get(context.Context, int, int) (library.ItemDetails, error) {
 	return library.ItemDetails{}, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) ListItems(context.Context, int) ([]library.Item, error) {
+func (unavailableItems) List(context.Context, int) ([]library.Item, error) {
 	return nil, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) ListItemsPage(context.Context, int, *int, int) (library.Page, error) {
-	return library.Page{}, errors.New("library storage is unavailable")
+func (unavailableItems) ListPage(context.Context, int, *int, int) ([]library.Item, error) {
+	return nil, errors.New("library storage is unavailable")
 }
-func (unavailableLibraryService) DeleteItem(context.Context, int, int) error {
+func (unavailableItems) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")
+}
+
+func (unavailableFeeds) Get(context.Context, int, int) (library.Feed, error) {
+	return library.Feed{}, errors.New("library storage is unavailable")
+}
+func (unavailableItems) SyncPage(context.Context, int, int, int, int) (library.SyncPage, error) {
+	return library.SyncPage{}, errors.New("library storage is unavailable")
+}
+func (unavailableItems) Changes(context.Context, int, int64, int) (library.ChangesPage, error) {
+	return library.ChangesPage{}, errors.New("library storage is unavailable")
 }

@@ -36,6 +36,15 @@ func Run(t *testing.T, factory Factory) {
 		if err != nil || len(ownerFeeds) != 1 || ownerFeeds[0].ID != ownerFeed.ID {
 			t.Fatalf("List() = %#v, %v", ownerFeeds, err)
 		}
+		gotFeed, err := feeds.Get(ctx, 1, ownerFeed.ID)
+		if err != nil || gotFeed != ownerFeed.Feed {
+			t.Fatalf("Get feed = %#v, %v", gotFeed, err)
+		}
+		for _, test := range []struct{ userID, feedID int }{{2, ownerFeed.ID}, {1, 999999}} {
+			if _, err := feeds.Get(ctx, test.userID, test.feedID); !errors.Is(err, library.ErrNotFound) {
+				t.Fatalf("Get feed (%d, %d) error = %v", test.userID, test.feedID, err)
+			}
+		}
 		empty, err := feeds.List(ctx, 99)
 		if err != nil || empty == nil || len(empty) != 0 {
 			t.Fatalf("empty List() = %#v, %v", empty, err)

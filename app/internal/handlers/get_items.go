@@ -25,6 +25,7 @@ type getItemsResponse struct {
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/get_items [get]
+// @Router       /api/v2/items [get]
 func (h *LibraryHandler) HandleGetItems(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {

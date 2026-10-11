@@ -20,15 +20,15 @@ func (f fakeResolver) Resolve(context.Context, string) (library.CreateFeedInput,
 	return f.input, nil
 }
 
-func TestHandleAddFeedLazy(t *testing.T) {
-	service := &fakeLibraryService{addFeed: func(_ context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
+func TestHandleAddFeedByURL(t *testing.T) {
+	service := &fakeLibraryState{addFeed: func(_ context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
 		return library.AddFeedResult{Feed: library.Feed{ID: 1, UserID: userID, Title: input.Title, Type: input.Type, URL: input.URL}, Created: true}, nil
 	}}
-	handler := NewLibraryHandler(service, fakeResolver{library.CreateFeedInput{Title: "Test Feed", Type: "rss", URL: "https://example.com"}})
+	handler := newTestLibraryHandler(service, fakeResolver{library.CreateFeedInput{Title: "Test Feed", Type: "rss", URL: "https://example.com"}})
 	request := httptest.NewRequest(http.MethodPost, "/add-lazy", bytes.NewBufferString(`{"url":"https://example.com"}`))
 	request = request.WithContext(auth.WithUser(request.Context(), models.User{ID: 1}))
 	response := httptest.NewRecorder()
-	handler.HandleAddFeedLazy(response, request)
+	handler.HandleAddFeedByURL(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -41,15 +41,15 @@ func TestHandleAddFeedLazy(t *testing.T) {
 	}
 }
 
-func TestHandleAddFeedLazyReturnsServerErrorWhenInsertFails(t *testing.T) {
-	service := &fakeLibraryService{addFeed: func(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
+func TestHandleAddFeedByURLReturnsServerErrorWhenInsertFails(t *testing.T) {
+	service := &fakeLibraryState{addFeed: func(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
 		return library.AddFeedResult{}, errors.New("database unavailable")
 	}}
-	handler := NewLibraryHandler(service, fakeResolver{library.CreateFeedInput{URL: "https://example.com"}})
+	handler := newTestLibraryHandler(service, fakeResolver{library.CreateFeedInput{URL: "https://example.com"}})
 	request := httptest.NewRequest(http.MethodPost, "/add-lazy", bytes.NewBufferString(`{"url":"https://example.com"}`))
 	request = request.WithContext(auth.WithUser(request.Context(), models.User{ID: 1}))
 	response := httptest.NewRecorder()
-	handler.HandleAddFeedLazy(response, request)
+	handler.HandleAddFeedByURL(response, request)
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d", response.Code)
 	}

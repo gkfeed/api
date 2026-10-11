@@ -28,6 +28,13 @@ definitions:
       item:
         $ref: '#/definitions/handlers.feedDTO'
     type: object
+  handlers.getItemResponse:
+    properties:
+      feed:
+        $ref: '#/definitions/handlers.feedDTO'
+      item:
+        $ref: '#/definitions/handlers.itemDTO'
+    type: object
   handlers.getItemsResponse:
     properties:
       items:
@@ -36,6 +43,21 @@ definitions:
         type: array
       next_cursor:
         type: integer
+    type: object
+  handlers.itemChangesResponse:
+    properties:
+      deleted_ids:
+        items:
+          type: integer
+        type: array
+      has_more:
+        type: boolean
+      next_cursor:
+        type: string
+      upserted:
+        items:
+          $ref: '#/definitions/handlers.itemDTO'
+        type: array
     type: object
   handlers.itemDTO:
     properties:
@@ -69,6 +91,19 @@ definitions:
       name:
         type: string
     type: object
+  handlers.syncItemsResponse:
+    properties:
+      has_more:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/handlers.itemDTO'
+        type: array
+      next_cursor:
+        type: string
+      sync_cursor:
+        type: string
+    type: object
   handlers.tokenResponse:
     properties:
       access_token:
@@ -95,7 +130,7 @@ info:
     url: https://github.com/gkfeed/api-go
   description: RSS feed aggregator with passkey authentication.
   title: GKFeed API
-  version: "1.0"
+  version: '2.0'
 paths:
   /api/v1/add:
     post:
@@ -112,16 +147,16 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             $ref: '#/definitions/handlers.feedMutationResponse'
-        "400":
-          description: Bad Request
-        "401":
-          description: Unauthorized
-        "500":
-          description: Internal Server Error
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -134,17 +169,19 @@ paths:
       produces:
       - application/json
       responses:
-        "401":
-          description: Unauthorized
-        "410":
+        '401':
+          description: ''
+        '410':
           description: Gone
           schema:
-            properties:
-              error:
-                type: string
-              replacement:
-                type: string
-            type: object
+            allOf:
+            - type: object
+            - properties:
+                error:
+                  type: string
+                replacement:
+                  type: string
+              type: object
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -163,23 +200,25 @@ paths:
         name: feed
         required: true
         schema:
-          properties:
-            url:
-              type: string
-          type: object
+          allOf:
+          - type: object
+          - properties:
+              url:
+                type: string
+            type: object
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             $ref: '#/definitions/handlers.feedMutationResponse'
-        "400":
-          description: Bad Request
-        "401":
-          description: Unauthorized
-        "500":
-          description: Internal Server Error
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -192,7 +231,7 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             items:
@@ -207,9 +246,9 @@ paths:
                   type: string
               type: object
             type: array
-        "401":
+        '401':
           description: Unauthorized
-        "500":
+        '500':
           description: Internal Server Error
       security:
       - BasicAuth: []
@@ -227,15 +266,15 @@ paths:
         required: true
         type: string
       responses:
-        "204":
+        '204':
           description: No Content
-        "400":
+        '400':
           description: Bad Request
-        "401":
+        '401':
           description: Unauthorized
-        "404":
+        '404':
           description: Not Found
-        "500":
+        '500':
           description: Internal Server Error
       security:
       - BasicAuth: []
@@ -259,15 +298,15 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             $ref: '#/definitions/handlers.tokenResponse'
-        "400":
+        '400':
           description: Bad Request
-        "401":
+        '401':
           description: Unauthorized
-        "500":
+        '500':
           description: Internal Server Error
       summary: Login with a password
       tags:
@@ -279,9 +318,9 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
-        "500":
+        '500':
           description: Internal Server Error
       summary: Begin passkey login
       tags:
@@ -302,7 +341,7 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             properties:
@@ -313,9 +352,9 @@ paths:
               refresh_token:
                 type: string
             type: object
-        "400":
+        '400':
           description: Bad Request
-        "500":
+        '500':
           description: Internal Server Error
       summary: Finish passkey login
       tags:
@@ -335,11 +374,11 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
+        '204':
           description: No Content
-        "400":
+        '400':
           description: Bad Request
-        "500":
+        '500':
           description: Internal Server Error
       summary: Logout
       tags:
@@ -349,11 +388,11 @@ paths:
       description: Revokes every refresh token and access session for the authenticated
         user.
       responses:
-        "204":
+        '204':
           description: No Content
-        "401":
+        '401':
           description: Unauthorized
-        "500":
+        '500':
           description: Internal Server Error
       security:
       - BasicAuth: []
@@ -367,7 +406,7 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             properties:
@@ -376,7 +415,7 @@ paths:
               name:
                 type: string
             type: object
-        "401":
+        '401':
           description: Unauthorized
       security:
       - BasicAuth: []
@@ -400,15 +439,15 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             $ref: '#/definitions/handlers.tokenResponse'
-        "400":
+        '400':
           description: Bad Request
-        "401":
+        '401':
           description: Unauthorized
-        "500":
+        '500':
           description: Internal Server Error
       summary: Refresh access token
       tags:
@@ -428,11 +467,11 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
-        "401":
+        '401':
           description: Unauthorized
-        "500":
+        '500':
           description: Internal Server Error
       security:
       - BasicAuth: []
@@ -456,7 +495,7 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             properties:
@@ -465,11 +504,11 @@ paths:
               name:
                 type: string
             type: object
-        "400":
+        '400':
           description: Bad Request
-        "401":
+        '401':
           description: Unauthorized
-        "500":
+        '500':
           description: Internal Server Error
       security:
       - BasicAuth: []
@@ -489,16 +528,16 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-        "401":
-          description: Unauthorized
-        "404":
-          description: Not Found
-        "500":
-          description: Internal Server Error
+        '204':
+          description: ''
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -511,12 +550,12 @@ paths:
       produces:
       - application/rss+xml
       responses:
-        "200":
-          description: OK
-        "401":
-          description: Unauthorized
-        "500":
-          description: Internal Server Error
+        '200':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -529,7 +568,7 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             items:
@@ -554,16 +593,16 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             $ref: '#/definitions/handlers.getItemsResponse'
-        "400":
-          description: Bad Request
-        "401":
-          description: Unauthorized
-        "500":
-          description: Internal Server Error
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -583,21 +622,23 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
-            properties:
-              feed:
-                type: object
-              item:
-                type: object
-            type: object
-        "400":
-          description: Bad Request
-        "401":
-          description: Unauthorized
-        "404":
-          description: Not Found
+            allOf:
+            - type: object
+            - properties:
+                feed:
+                  type: object
+                item:
+                  type: object
+              type: object
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -614,16 +655,16 @@ paths:
         required: true
         type: integer
       responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-        "401":
-          description: Unauthorized
-        "404":
-          description: Not Found
-        "500":
-          description: Internal Server Error
+        '204':
+          description: ''
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -636,22 +677,281 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
+        '200':
           description: OK
           schema:
             items:
               type: object
             type: array
-        "401":
-          description: Unauthorized
-        "500":
-          description: Internal Server Error
+        '401':
+          description: ''
+        '500':
+          description: ''
       security:
       - BasicAuth: []
       - BearerAuth: []
       summary: List feeds
       tags:
       - feeds
+  /api/v2/feeds:
+    get:
+      description: Returns all feeds for the authenticated user.
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+        '401':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: List feeds
+      tags:
+      - feeds
+    post:
+      consumes:
+      - application/json
+      description: Creates a feed with explicit title, type, and URL. Repeated creation
+        returns the existing feed.
+      parameters:
+      - description: Feed to create (title, type, url required)
+        in: body
+        name: feed
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createFeedDTO'
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.feedMutationResponse'
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Create feed
+      tags:
+      - feeds
+  /api/v2/feeds/{id}:
+    delete:
+      description: Deletes a feed and all its items. Only the owner can delete it.
+      parameters:
+      - description: Feed ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Delete feed by ID
+      tags:
+      - feeds
+    get:
+      description: Returns a feed owned by the authenticated user.
+      parameters:
+      - description: Feed ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.feedDTO'
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Get feed by ID
+      tags:
+      - feeds
+  /api/v2/items:
+    get:
+      description: Returns paginated items for the authenticated user. Supports cursor-based
+        pagination.
+      parameters:
+      - description: Items per page (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor (item ID)
+        in: query
+        name: cursor
+        type: integer
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.getItemsResponse'
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Get items
+      tags:
+      - items
+  /api/v2/items/changes:
+    get:
+      description: Returns item mutations after a sync cursor. Apply each response
+        before using its next cursor.
+      parameters:
+      - description: Changes per page (default 100, maximum 500)
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque sync cursor
+        in: query
+        name: cursor
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.itemChangesResponse'
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Get item changes
+      tags:
+      - items
+  /api/v2/items/sync:
+    get:
+      description: Returns a bounded item page and a sync cursor for later changes.
+      parameters:
+      - description: Items per page (default 100, maximum 500)
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque page cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.syncItemsResponse'
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: List items for synchronization
+      tags:
+      - items
+  /api/v2/items/{id}:
+    delete:
+      description: Permanently deletes an item owned by the authenticated user.
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Delete item
+      tags:
+      - items
+    get:
+      description: Returns an item and its parent feed for the authenticated user.
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.getItemResponse'
+        '400':
+          description: ''
+        '401':
+          description: ''
+        '404':
+          description: ''
+        '500':
+          description: ''
+      security:
+      - BasicAuth: []
+      - BearerAuth: []
+      summary: Get item by ID
+      tags:
+      - items
   /api/v2/me:
     get:
       produces:
@@ -767,4 +1067,4 @@ securityDefinitions:
     in: header
     name: Cookie
     type: apiKey
-swagger: "2.0"
+swagger: '2.0'

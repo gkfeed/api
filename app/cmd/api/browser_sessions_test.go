@@ -102,7 +102,7 @@ func TestBrowserSessionLifecycle(t *testing.T) {
 	}
 	// Rebuilding the handler replaces in-memory stores while the database stays.
 	handler = newHandler(cfg)
-	for _, path := range []string{"/api/v2/me", "/api/v1/list", "/api/v1/auth/me"} {
+	for _, path := range []string{"/api/v2/me", "/api/v1/list", "/api/v1/auth/me", "/api/v2/feeds", "/api/v2/items", "/api/v2/items/sync"} {
 		w := browserRequest(handler, http.MethodGet, path, "", "", first)
 		if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("restored %s = %d, %s", path, w.Code, w.Body.String())
@@ -147,6 +147,8 @@ func TestBrowserSessionOriginProtection(t *testing.T) {
 		{"POST", "/api/v2/sessions/passkey/begin", ""},
 		{"POST", "/api/v2/sessions/passkey/finish", "{}"},
 		{"DELETE", "/api/v1/items/123", ""},
+		{"DELETE", "/api/v2/items/123", ""},
+		{"POST", "/api/v2/feeds", "{}"},
 		{"POST", "/api/v1/auth/logout-all", ""},
 		{"POST", "/api/v1/auth/register/begin", "{}"},
 	} {
@@ -302,5 +304,37 @@ func TestBrowserSessionOriginAndCORSConfiguration(t *testing.T) {
 		if w := browserRequest(newHandler(noPasskeys), "POST", path, "{}", browserOrigin, nil); w.Code != 503 {
 			t.Fatalf("unconfigured passkey %s = %d", path, w.Code)
 		}
+	}
+}
+
+func TestBrowserSyncCursorAndSessionAfterRestart(t *testing.T) {
+	database, cfg := browserFixture(t)
+	cfg.SyncCursorSecret = strings.Repeat("s", 32)
+	if _, err := database.Exec("INSERT INTO feed (id,title,url,type,user_id) VALUES (1,'test','https://example.com','rss',1)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec("INSERT INTO item (id,feed_id,title,text,date,link) VALUES (1,1,'test','','2026-01-01T00:00:00Z','')"); err != nil {
+		t.Fatal(err)
+	}
+	handler := newHandler(cfg)
+	cookie := browserLogin(t, handler)
+	page := browserRequest(handler, "GET", "/api/v2/items/sync", "", "", cookie)
+	var response struct {
+		SyncCursor string `json:"sync_cursor"`
+	}
+	if err := json.Unmarshal(page.Body.Bytes(), &response); err != nil || page.Code != 200 || response.SyncCursor == "" {
+		t.Fatalf("sync page = %d, %s, %v", page.Code, page.Body.String(), err)
+	}
+	path := "/api/v2/items/changes?cursor=" + response.SyncCursor
+	if w := browserRequest(newHandler(cfg), "GET", path, "", "", cookie); w.Code != 200 {
+		t.Fatalf("restored sync = %d, %s", w.Code, w.Body.String())
+	}
+	cfg.SyncCursorSecret = strings.Repeat("r", 32)
+	restarted := newHandler(cfg)
+	if w := browserRequest(restarted, "GET", path, "", "", cookie); w.Code != 400 {
+		t.Fatalf("rotated key accepted old cursor = %d", w.Code)
+	}
+	if w := browserRequest(restarted, "GET", "/api/v2/me", "", "", cookie); w.Code != 200 {
+		t.Fatalf("sync key rotation ended browser session = %d", w.Code)
 	}
 }

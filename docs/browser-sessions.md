@@ -47,7 +47,7 @@ wildcard origins receive `403`. Configure full origins with scheme and port,
 without a trailing slash. The proxy must preserve the browser's `Origin`.
 The API does not infer trust from `Host` or forwarded headers.
 
-Existing protected v1 routes also accept the cookie. Unsafe cookie requests,
+Existing protected v1 routes and v2 feed/item routes also accept the cookie. Unsafe cookie requests,
 including feed changes and passkey registration, require the same Origin check.
 An explicit `Authorization` header uses the existing Basic/Bearer contract.
 Basic and Bearer clients keep their existing request formats.

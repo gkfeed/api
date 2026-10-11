@@ -65,7 +65,7 @@ async function basicLogin() {
   const u = document.getElementById('username').value;
   const p = document.getElementById('password').value;
   basicCreds = btoa(u + ':' + p);
-  const r = await fetch(BASE + '/api/v1/list', {
+  const r = await fetch(BASE + '/api/v2/feeds', {
     headers: { 'Authorization': 'Basic ' + basicCreds }
   });
   const el = document.getElementById('login-result');

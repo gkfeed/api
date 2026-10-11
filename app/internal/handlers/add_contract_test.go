@@ -31,10 +31,11 @@ func TestFeedCreationHandlers(t *testing.T) {
 			defer database.Close()
 			database.SetMaxOpenConns(8)
 			testschema.Init(t, database)
-			service := library.NewService(storage.NewFeedRepository(database), storage.NewItemRepository(database))
+			feeds := storage.NewFeedRepository(database)
+			items := storage.NewItemRepository(database)
 			call := func(userID int, kind, url string) (feedMutationResponse, int, error) {
-				input := library.CreateFeedInput{Title: "feed", Type: kind, URL: url}
-				handler := NewLibraryHandler(service, fakeResolver{input})
+				input := library.CreateFeedInput{Title: "feed", Type: library.FeedType(kind), URL: url}
+				handler := NewLibraryHandler(feeds, items, fakeResolver{input})
 				payload := map[string]string{"title": input.Title, "type": kind, "url": url}
 				if lazy {
 					payload = map[string]string{"url": url}
@@ -47,7 +48,7 @@ func TestFeedCreationHandlers(t *testing.T) {
 				request = request.WithContext(auth.WithUser(request.Context(), models.User{ID: userID}))
 				response := httptest.NewRecorder()
 				if lazy {
-					handler.HandleAddFeedLazy(response, request)
+					handler.HandleAddFeedByURL(response, request)
 				} else {
 					handler.HandleAddFeed(response, request)
 				}

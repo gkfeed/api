@@ -30,7 +30,7 @@ type itemDTO struct {
 }
 
 func toFeedDTO(feed library.Feed) feedDTO {
-	return feedDTO{ID: feed.ID, Title: feed.Title, Type: feed.Type, URL: feed.URL, UserID: feed.UserID}
+	return feedDTO{ID: feed.ID, Title: feed.Title, Type: string(feed.Type), URL: feed.URL, UserID: feed.UserID}
 }
 
 func feedDTOs(feeds []library.Feed) []feedDTO {
