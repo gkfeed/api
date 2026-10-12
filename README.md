@@ -92,10 +92,39 @@ feed. Deleting a feed also deletes its items.
 | `GET` | `/api/v2/items/{id}` | Get an owned item and its feed |
 | `DELETE` | `/api/v2/items/{id}` | Delete an owned item |
 
-The existing v2 list and mutation responses keep their v1 JSON shapes and status codes.
+Successful v2 list and mutation responses keep their v1 JSON shapes and status codes.
 `GET /api/v2/feeds/{id}` returns a feed object from the list. The v1 routes
 below remain available while clients migrate. v2 has no lazy feed creation or
 item PATCH route.
+
+### Resource errors
+
+`GET /api/v2/feeds`, `GET` and `DELETE /api/v2/feeds/{id}`, and `GET` and
+`DELETE /api/v2/items/{id}` return the errors listed below as `application/json`:
+
+```json
+{"error":"not_found","message":"Resource not found"}
+```
+
+Clients should use the stable `error` code to distinguish failures:
+
+- `400`, `invalid_id`: the ID must be a positive integer within the server's integer range.
+- `401`, `unauthorized`: credentials are missing or invalid. Authentication challenges and cookie headers are preserved.
+- `404`, `not_found`: the resource is missing or belongs to another user. Both cases return the same body.
+- `405`, `method_not_allowed`: the method is unsupported on the resource path. `Allow` lists the supported methods.
+- `500`, `internal_error`: the request failed. Internal details are logged rather than returned.
+
+Authentication is checked before ID validation. Unsupported methods return `405`
+before authentication. Successful deletion returns `204` with no body; reading
+or deleting the resource again returns `404`. Feed deletion also removes its items.
+
+The error format applies only to these operations and their method errors.
+Feed creation, the item list, sync/changes, unknown URLs, and v1 keep their
+existing responses. v1 removal remains conditional on front and gkbot migration
+and verification of their deployed versions, as described in
+[`tasks/remove-v1-library-routes.md`](tasks/remove-v1-library-routes.md).
+Cookie authentication's Origin-policy failures retain the browser-session
+contract described in [`docs/browser-sessions.md`](docs/browser-sessions.md).
 
 ### Legacy v1 routes
 

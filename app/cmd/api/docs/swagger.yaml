@@ -1,4 +1,22 @@
 definitions:
+  handlers.ResourceError:
+    properties:
+      error:
+        enum:
+        - invalid_id
+        - unauthorized
+        - not_found
+        - internal_error
+        - method_not_allowed
+        example: not_found
+        type: string
+      message:
+        example: Resource not found
+        type: string
+    required:
+    - error
+    - message
+    type: object
   handlers.createFeedDTO:
     properties:
       title:
@@ -695,23 +713,41 @@ paths:
       - feeds
   /api/v2/feeds:
     get:
-      description: Returns all feeds for the authenticated user.
+      description: Returns the authenticated user's feeds. An empty list is returned
+        as [].
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
-              type: object
+              $ref: '#/definitions/handlers.feedDTO'
             type: array
-        '401':
-          description: ''
-        '500':
-          description: ''
+        "401":
+          description: 'unauthorized: missing or invalid credentials'
+          headers:
+            WWW-Authenticate:
+              description: Basic authentication challenge for realm Restricted
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "405":
+          description: 'method_not_allowed: use GET or POST on this path'
+          headers:
+            Allow:
+              description: GET, POST
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "500":
+          description: 'internal_error: request failed'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
+      - BrowserSession: []
       summary: List feeds
       tags:
       - feeds
@@ -748,56 +784,114 @@ paths:
       - feeds
   /api/v2/feeds/{id}:
     delete:
-      description: Deletes a feed and all its items. Only the owner can delete it.
+      description: Deletes an owned feed and all its items. Missing, foreign, and
+        previously deleted IDs all return 404. Authentication is checked before the
+        ID.
       parameters:
-      - description: Feed ID
+      - description: Positive feed ID
         in: path
+        minimum: 1
         name: id
         required: true
         type: integer
+      produces:
+      - application/json
+      - text/plain
       responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-        '401':
-          description: ''
-        '404':
-          description: ''
-        '500':
-          description: ''
+        "204":
+          description: Deleted; response body is empty
+        "400":
+          description: 'invalid_id: ID must be a positive integer within the server''s
+            integer range'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "401":
+          description: 'unauthorized: missing or invalid credentials'
+          headers:
+            WWW-Authenticate:
+              description: Basic authentication challenge for realm Restricted
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "403":
+          description: Browser-session Origin policy rejected the request; response
+            is text/plain
+          schema:
+            type: string
+        "404":
+          description: 'not_found: feed is missing or belongs to another user'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "405":
+          description: 'method_not_allowed: use GET or DELETE on this path'
+          headers:
+            Allow:
+              description: GET, DELETE
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "500":
+          description: 'internal_error: request failed'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
+      - BrowserSession: []
       summary: Delete feed by ID
       tags:
       - feeds
     get:
-      description: Returns a feed owned by the authenticated user.
+      description: Returns an owned feed with the same fields as a feed list entry.
+        Missing and foreign IDs both return 404. Authentication is checked before
+        the ID.
       parameters:
-      - description: Feed ID
+      - description: Positive feed ID
         in: path
+        minimum: 1
         name: id
         required: true
         type: integer
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/handlers.feedDTO'
-        '400':
-          description: ''
-        '401':
-          description: ''
-        '404':
-          description: ''
-        '500':
-          description: ''
+        "400":
+          description: 'invalid_id: ID must be a positive integer within the server''s
+            integer range'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "401":
+          description: 'unauthorized: missing or invalid credentials'
+          headers:
+            WWW-Authenticate:
+              description: Basic authentication challenge for realm Restricted
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "404":
+          description: 'not_found: feed is missing or belongs to another user'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "405":
+          description: 'method_not_allowed: use GET or DELETE on this path'
+          headers:
+            Allow:
+              description: GET, DELETE
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "500":
+          description: 'internal_error: request failed'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
+      - BrowserSession: []
       summary: Get feed by ID
       tags:
       - feeds
@@ -899,56 +993,112 @@ paths:
       - items
   /api/v2/items/{id}:
     delete:
-      description: Permanently deletes an item owned by the authenticated user.
+      description: Permanently deletes an owned item. Missing, foreign, and previously
+        deleted IDs all return 404. Authentication is checked before the ID.
       parameters:
-      - description: Item ID
+      - description: Positive item ID
         in: path
+        minimum: 1
         name: id
         required: true
         type: integer
+      produces:
+      - application/json
+      - text/plain
       responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-        '401':
-          description: ''
-        '404':
-          description: ''
-        '500':
-          description: ''
+        "204":
+          description: Deleted; response body is empty
+        "400":
+          description: 'invalid_id: ID must be a positive integer within the server''s
+            integer range'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "401":
+          description: 'unauthorized: missing or invalid credentials'
+          headers:
+            WWW-Authenticate:
+              description: Basic authentication challenge for realm Restricted
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "403":
+          description: Browser-session Origin policy rejected the request; response
+            is text/plain
+          schema:
+            type: string
+        "404":
+          description: 'not_found: item is missing or belongs to another user'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "405":
+          description: 'method_not_allowed: use GET or DELETE on this path'
+          headers:
+            Allow:
+              description: GET, DELETE
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "500":
+          description: 'internal_error: request failed'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
+      - BrowserSession: []
       summary: Delete item
       tags:
       - items
     get:
-      description: Returns an item and its parent feed for the authenticated user.
+      description: Returns an owned item and its parent feed. Missing and foreign
+        IDs both return 404. Authentication is checked before the ID.
       parameters:
-      - description: Item ID
+      - description: Positive item ID
         in: path
+        minimum: 1
         name: id
         required: true
         type: integer
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/handlers.getItemResponse'
-        '400':
-          description: ''
-        '401':
-          description: ''
-        '404':
-          description: ''
-        '500':
-          description: ''
+        "400":
+          description: 'invalid_id: ID must be a positive integer within the server''s
+            integer range'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "401":
+          description: 'unauthorized: missing or invalid credentials'
+          headers:
+            WWW-Authenticate:
+              description: Basic authentication challenge for realm Restricted
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "404":
+          description: 'not_found: item is missing or belongs to another user'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "405":
+          description: 'method_not_allowed: use GET or DELETE on this path'
+          headers:
+            Allow:
+              description: GET, DELETE
+              type: string
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "500":
+          description: 'internal_error: request failed'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
+      - BrowserSession: []
       summary: Get item by ID
       tags:
       - items
