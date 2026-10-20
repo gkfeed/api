@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"gkfeed/api/internal/auth"
 	"gkfeed/api/internal/db"
-	"gkfeed/api/internal/models"
 	"gkfeed/api/internal/passwordhash"
 	"gkfeed/api/internal/storage/repositorytest"
 )
@@ -129,15 +129,16 @@ func TestPostgresAuthContract(t *testing.T) {
 	if err != nil || len(infos) != 1 {
 		t.Fatalf("credential infos = %#v, %v", infos, err)
 	}
-	token := models.RefreshToken{ID: "token", UserID: 1, ExpiresAt: time.Now().Add(time.Hour)}
-	if err := db.StoreRefreshToken(token); err != nil {
+	tokenHash := []byte("test-token-digest")
+	family := []byte("test-family")
+	if err := db.CreateAuthRefreshToken(1, tokenHash, family, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	stored, err := db.GetRefreshToken(token.ID)
-	if err != nil || stored.UserID != 1 {
-		t.Fatalf("token = %#v, %v", stored, err)
+	rotation, err := db.RotateAuthRefreshToken(tokenHash, []byte("next-token-digest"), time.Now(), time.Now().Add(time.Hour))
+	if err != nil || rotation.User.ID != 1 {
+		t.Fatalf("rotation = %#v, %v", rotation, err)
 	}
-	if err := db.DeleteRefreshToken(token.ID); err != nil {
+	if _, err := db.RevokeAuthRefreshToken([]byte("next-token-digest"), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if ok, err := db.DeleteWebAuthnCredential(credential.ID, 1); err != nil || !ok {
@@ -146,5 +147,39 @@ func TestPostgresAuthContract(t *testing.T) {
 	// The application role must not acquire schema ownership.
 	if _, err := app.Exec("CREATE TABLE forbidden (id integer)"); err == nil {
 		t.Fatal("application role can create tables")
+	}
+}
+
+func TestPostgresBrowserSessionContract(t *testing.T) {
+	_, app := postgresFixture(t)
+	db.Configure(app)
+	t.Cleanup(func() { db.Configure(nil) })
+	if err := db.CheckBrowserSessionSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	hash := auth.DigestToken("browser-contract-session")
+	expiry := now.Add(auth.BrowserSessionMaxTTL)
+	if err := db.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
+		t.Fatal(err)
+	}
+	user, actualExpiry, err := db.TouchBrowserSession(t.Context(), hash, now.Add(time.Hour), auth.BrowserSessionIdleTTL)
+	if err != nil || user.ID != 1 || !actualExpiry.Truncate(time.Microsecond).Equal(expiry.Truncate(time.Microsecond)) {
+		t.Fatalf("browser session = %#v, %v, %v", user, actualExpiry, err)
+	}
+	if err := db.DeleteBrowserSession(t.Context(), hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.TouchBrowserSession(t.Context(), hash, now.Add(2*time.Hour), auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
+		t.Fatalf("deleted browser session = %v", err)
+	}
+	if err := db.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteUserBrowserSessions(t.Context(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.TouchBrowserSession(t.Context(), hash, now, auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
+		t.Fatalf("logout-all browser session = %v", err)
 	}
 }

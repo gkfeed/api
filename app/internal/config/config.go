@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"slices"
@@ -12,8 +14,7 @@ const (
 	addressEnvironmentVariable           = "GKFEED_ADDRESS"
 	databaseEnvironmentVariable          = "GKFEED_DATABASE_URL"
 	allowedOriginsEnvironmentVariable    = "GKFEED_ALLOWED_ORIGINS"
-	jwtSecretEnvironmentVariable         = "GKFEED_JWT_SECRET"
-	jwtAccessTTLEnvironmentVariable      = "GKFEED_JWT_ACCESS_TTL"
+	accessTTLEnvironmentVariable         = "GKFEED_ACCESS_TTL"
 	jwtRefreshTTLEnvironmentVariable     = "GKFEED_JWT_REFRESH_TTL"
 	webauthnRPIDEnvironmentVariable      = "GKFEED_WEBAUTHN_RP_ID"
 	webauthnRPOriginEnvironmentVariable  = "GKFEED_WEBAUTHN_RP_ORIGIN"
@@ -27,9 +28,8 @@ var defaultAllowedOrigins = []string{
 }
 
 const (
-	minJWTSecretLength       = 32
-	defaultAccessTokenTTL    = 15 * time.Minute
-	defaultRefreshTokenTTL   = 720 * time.Hour
+	defaultAccessTokenTTL    = 30 * time.Minute
+	defaultRefreshTokenTTL   = 90 * 24 * time.Hour
 	defaultWebAuthnRPDisplay = "GKFeed"
 )
 
@@ -39,36 +39,51 @@ type Config struct {
 	AllowedOrigins    []string
 	ReadHeaderTimeout time.Duration
 
-	JWTSecret       string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
+	SyncCursorSecret string
+	AccessTokenTTL   time.Duration
+	RefreshTokenTTL  time.Duration
 
 	WebAuthnRPID      string
 	WebAuthnRPOrigin  string
 	WebAuthnRPDisplay string
 }
 
-func Load() (Config, error) {
-	jwtSecret := strings.TrimSpace(os.Getenv(jwtSecretEnvironmentVariable))
-	if len(jwtSecret) < minJWTSecretLength {
-		return Config{}, fmt.Errorf(
-			"%s must be explicitly set to a cryptographically random value of at least %d bytes",
-			jwtSecretEnvironmentVariable,
-			minJWTSecretLength,
-		)
+func (c Config) EffectiveAccessTokenTTL() time.Duration {
+	if c.AccessTokenTTL > 0 {
+		return c.AccessTokenTTL
 	}
+	return defaultAccessTokenTTL
+}
 
+func (c Config) EffectiveRefreshTokenTTL() time.Duration {
+	if c.RefreshTokenTTL > 0 {
+		return c.RefreshTokenTTL
+	}
+	return defaultRefreshTokenTTL
+}
+
+func Load() (Config, error) {
 	if strings.TrimSpace(os.Getenv(databaseEnvironmentVariable)) == "" {
 		return Config{}, fmt.Errorf("%s must be set to a PostgreSQL connection URL", databaseEnvironmentVariable)
 	}
+	syncSecret := valueOrDefault("GKFEED_SYNC_CURSOR_SECRET", strings.TrimSpace(os.Getenv("GKFEED_JWT_SECRET")))
+	if syncSecret == "" {
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			return Config{}, fmt.Errorf("generate sync cursor key: %w", err)
+		}
+		syncSecret = base64.RawURLEncoding.EncodeToString(raw)
+	} else if len(syncSecret) < 32 {
+		return Config{}, fmt.Errorf("sync cursor key must contain at least 32 bytes")
+	}
 	return Config{
+		SyncCursorSecret:  syncSecret,
 		Address:           valueOrDefault(addressEnvironmentVariable, ":8086"),
 		DatabaseURL:       strings.TrimSpace(os.Getenv(databaseEnvironmentVariable)),
 		AllowedOrigins:    allowedOrigins(),
 		ReadHeaderTimeout: 5 * time.Second,
 
-		JWTSecret:       jwtSecret,
-		AccessTokenTTL:  durationOrDefault(jwtAccessTTLEnvironmentVariable, defaultAccessTokenTTL),
+		AccessTokenTTL:  durationOrDefault(accessTTLEnvironmentVariable, defaultAccessTokenTTL),
 		RefreshTokenTTL: durationOrDefault(jwtRefreshTTLEnvironmentVariable, defaultRefreshTokenTTL),
 
 		WebAuthnRPID:      os.Getenv(webauthnRPIDEnvironmentVariable),
