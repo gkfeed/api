@@ -7,5 +7,6 @@ services:
       - "8086:8086"
     environment:
       GKFEED_ADDRESS: ":8086"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       GKFEED_DATABASE_URL: "${GKFEED_DATABASE_URL:?set GKFEED_DATABASE_URL to the PostgreSQL application connection URL}"
     restart: always

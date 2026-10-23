@@ -35,7 +35,7 @@ func TestFeedCreationHandlers(t *testing.T) {
 			items := storage.NewItemRepository(database)
 			call := func(userID int, kind, url string) (feedMutationResponse, int, error) {
 				input := library.CreateFeedInput{Title: "feed", Type: library.FeedType(kind), URL: url}
-				handler := NewLibraryHandler(feeds, items, fakeResolver{input})
+				handler := NewLibraryHandler(feeds, items, fakeResolver{input}, nil)
 				payload := map[string]string{"title": input.Title, "type": kind, "url": url}
 				if lazy {
 					payload = map[string]string{"url": url}

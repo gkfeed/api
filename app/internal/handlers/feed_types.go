@@ -1,38 +1,9 @@
 package handlers
 
-import "net/http"
-
-var feedTypes = [...]string{
-	"web",
-	"tiktok",
-	"kinogo",
-	"twitch",
-	"yummyanime",
-	"shiki",
-	"reddit",
-	"vk",
-	"yt",
-	"ranobe.me",
-	"spoti",
-	"rezka",
-	"inst",
-	"stories",
-	"insolarance",
-	"mangalib",
-	"x",
-	"spoti:playlist",
-	"onefootball",
-	"rtl",
-	"rezka:collection",
-	"matreshka",
-	"shiki:ongoing",
-	"anilibria",
-	"pornhub",
-	"hltv",
-	"liquidpedia",
-	"sasflix",
-	"porno365",
-}
+import (
+	"gkfeed/api/internal/library"
+	"net/http"
+)
 
 // @Summary      List feed types
 // @Description  Returns all feed type identifiers supported by the parser.
@@ -41,5 +12,9 @@ var feedTypes = [...]string{
 // @Success      200  {array}  string
 // @Router       /api/v1/feed_types [get]
 func HandleListFeedTypes(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, feedTypes)
+	types := make([]string, 0)
+	for _, option := range library.FeedTypeOptions() {
+		types = append(types, string(option.Type))
+	}
+	writeJSON(w, types)
 }

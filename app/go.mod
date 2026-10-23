@@ -11,6 +11,7 @@ require (
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/swaggo/swag v1.8.1
 	golang.org/x/crypto v0.52.0
+	golang.org/x/net v0.54.0
 )
 
 require (

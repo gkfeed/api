@@ -69,10 +69,20 @@ type CreateFeedInput struct {
 	URL   string
 }
 
+// CreateFeedsInput selects subscriptions for one source URL. Type and Types
+// are mutually exclusive; nil Types means automatic selection is allowed.
+type CreateFeedsInput struct {
+	Title string
+	Type  FeedType
+	Types []FeedType
+	URL   string
+}
+
 type FeedRepository interface {
 	List(ctx context.Context, userID int) ([]Feed, error)
 	Get(ctx context.Context, userID, feedID int) (Feed, error)
 	Add(ctx context.Context, userID int, input CreateFeedInput) (AddFeedResult, error)
+	AddBatch(ctx context.Context, userID int, inputs []CreateFeedInput) ([]AddFeedResult, error)
 	Delete(ctx context.Context, userID, feedID int) error
 }
 

@@ -12,6 +12,7 @@ func TestLoadUsesEnvironment(t *testing.T) {
 	t.Setenv(databaseEnvironmentVariable, "postgres://localhost/gkfeed")
 	t.Setenv(allowedOriginsEnvironmentVariable, "https://one.example, https://two.example")
 	t.Setenv(accessTTLEnvironmentVariable, "45m")
+	t.Setenv("OPENROUTER_API_KEY", " unit-key ")
 
 	configuration, err := Load()
 	if err != nil {
@@ -20,6 +21,9 @@ func TestLoadUsesEnvironment(t *testing.T) {
 
 	if configuration.Address != "127.0.0.1:9000" {
 		t.Fatalf("Address = %q, want %q", configuration.Address, "127.0.0.1:9000")
+	}
+	if configuration.OpenRouterAPIKey != "unit-key" {
+		t.Fatal("OpenRouter configuration was not loaded")
 	}
 	if configuration.DatabaseURL != "postgres://localhost/gkfeed" {
 		t.Fatalf("DatabaseURL = %q, want %q", configuration.DatabaseURL, "postgres://localhost/gkfeed")
