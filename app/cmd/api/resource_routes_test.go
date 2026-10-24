@@ -14,14 +14,17 @@ import (
 	"gkfeed/api/internal/testschema"
 )
 
-func TestV2ResourceRoutesAndV1Compatibility(t *testing.T) {
+func resourceTestDatabase(t *testing.T) *sql.DB {
+	t.Helper()
 	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "db.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer database.Close()
 	db.Configure(database)
-	t.Cleanup(func() { db.Configure(nil) })
+	t.Cleanup(func() {
+		db.Configure(nil)
+		database.Close()
+	})
 	testschema.Init(t, database)
 	for _, user := range []struct {
 		id   int
@@ -42,6 +45,11 @@ func TestV2ResourceRoutesAndV1Compatibility(t *testing.T) {
 	if _, err := database.Exec("INSERT INTO item (id, feed_id, title, text, date, link) VALUES (?, ?, ?, ?, ?, ?)", 23, 11, "Delete me", "Text", "2026-01-01T00:00:00Z", "https://example.com/delete"); err != nil {
 		t.Fatal(err)
 	}
+	return database
+}
+
+func TestV2ResourceRoutesAndV1Compatibility(t *testing.T) {
+	resourceTestDatabase(t)
 	handler := newHandler(config.Config{})
 	call := func(method, path, username, body string) *httptest.ResponseRecorder {
 		t.Helper()

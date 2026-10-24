@@ -14,7 +14,6 @@ import "net/http"
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/items/{id} [delete]
-// @Router       /api/v2/items/{id} [delete]
 func (h *LibraryHandler) HandleDeleteItem(w http.ResponseWriter, r *http.Request) {
 	user, ok := authenticatedUser(w, r)
 	if !ok {

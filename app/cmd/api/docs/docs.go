@@ -866,9 +866,12 @@ const docTemplate = `{
                     },
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "BrowserSession": []
                     }
                 ],
-                "description": "Returns all feeds for the authenticated user.",
+                "description": "Returns the authenticated user's feeds. An empty list is returned as [].",
                 "produces": [
                     "application/json"
                 ],
@@ -882,15 +885,39 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "type": "object"
+                                "$ref": "#/definitions/handlers.feedDTO"
                             }
                         }
                     },
                     "401": {
-                        "description": ""
+                        "description": "unauthorized: missing or invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "WWW-Authenticate": {
+                                "type": "string",
+                                "description": "Basic authentication challenge for realm Restricted"
+                            }
+                        }
+                    },
+                    "405": {
+                        "description": "method_not_allowed: use GET or POST on this path",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "Allow": {
+                                "type": "string",
+                                "description": "GET, POST"
+                            }
+                        }
                     },
                     "500": {
-                        "description": ""
+                        "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             },
@@ -979,9 +1006,12 @@ const docTemplate = `{
                     },
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "BrowserSession": []
                     }
                 ],
-                "description": "Returns a feed owned by the authenticated user.",
+                "description": "Returns an owned feed with the same fields as a feed list entry. Missing and foreign IDs both return 404. Authentication is checked before the ID.",
                 "produces": [
                     "application/json"
                 ],
@@ -991,8 +1021,9 @@ const docTemplate = `{
                 "summary": "Get feed by ID",
                 "parameters": [
                     {
+                        "minimum": 1,
                         "type": "integer",
-                        "description": "Feed ID",
+                        "description": "Positive feed ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1006,16 +1037,46 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": ""
+                        "description": "invalid_id: ID must be a positive integer within the server's integer range",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     },
                     "401": {
-                        "description": ""
+                        "description": "unauthorized: missing or invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "WWW-Authenticate": {
+                                "type": "string",
+                                "description": "Basic authentication challenge for realm Restricted"
+                            }
+                        }
                     },
                     "404": {
-                        "description": ""
+                        "description": "not_found: feed is missing or belongs to another user",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
+                    },
+                    "405": {
+                        "description": "method_not_allowed: use GET or DELETE on this path",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "Allow": {
+                                "type": "string",
+                                "description": "GET, DELETE"
+                            }
+                        }
                     },
                     "500": {
-                        "description": ""
+                        "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             },
@@ -1026,17 +1087,25 @@ const docTemplate = `{
                     },
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "BrowserSession": []
                     }
                 ],
-                "description": "Deletes a feed and all its items. Only the owner can delete it.",
+                "description": "Deletes an owned feed and all its items. Missing, foreign, and previously deleted IDs all return 404. Authentication is checked before the ID.",
+                "produces": [
+                    "application/json",
+                    "text/plain"
+                ],
                 "tags": [
                     "feeds"
                 ],
                 "summary": "Delete feed by ID",
                 "parameters": [
                     {
+                        "minimum": 1,
                         "type": "integer",
-                        "description": "Feed ID",
+                        "description": "Positive feed ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1044,19 +1113,55 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "Deleted; response body is empty"
                     },
                     "400": {
-                        "description": ""
+                        "description": "invalid_id: ID must be a positive integer within the server's integer range",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     },
                     "401": {
-                        "description": ""
+                        "description": "unauthorized: missing or invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "WWW-Authenticate": {
+                                "type": "string",
+                                "description": "Basic authentication challenge for realm Restricted"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Browser-session Origin policy rejected the request; response is text/plain",
+                        "schema": {
+                            "type": "string"
+                        }
                     },
                     "404": {
-                        "description": ""
+                        "description": "not_found: feed is missing or belongs to another user",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
+                    },
+                    "405": {
+                        "description": "method_not_allowed: use GET or DELETE on this path",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "Allow": {
+                                "type": "string",
+                                "description": "GET, DELETE"
+                            }
+                        }
                     },
                     "500": {
-                        "description": ""
+                        "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             }
@@ -1223,9 +1328,12 @@ const docTemplate = `{
                     },
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "BrowserSession": []
                     }
                 ],
-                "description": "Returns an item and its parent feed for the authenticated user.",
+                "description": "Returns an owned item and its parent feed. Missing and foreign IDs both return 404. Authentication is checked before the ID.",
                 "produces": [
                     "application/json"
                 ],
@@ -1235,8 +1343,9 @@ const docTemplate = `{
                 "summary": "Get item by ID",
                 "parameters": [
                     {
+                        "minimum": 1,
                         "type": "integer",
-                        "description": "Item ID",
+                        "description": "Positive item ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1250,16 +1359,46 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": ""
+                        "description": "invalid_id: ID must be a positive integer within the server's integer range",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     },
                     "401": {
-                        "description": ""
+                        "description": "unauthorized: missing or invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "WWW-Authenticate": {
+                                "type": "string",
+                                "description": "Basic authentication challenge for realm Restricted"
+                            }
+                        }
                     },
                     "404": {
-                        "description": ""
+                        "description": "not_found: item is missing or belongs to another user",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
+                    },
+                    "405": {
+                        "description": "method_not_allowed: use GET or DELETE on this path",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "Allow": {
+                                "type": "string",
+                                "description": "GET, DELETE"
+                            }
+                        }
                     },
                     "500": {
-                        "description": ""
+                        "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             },
@@ -1270,17 +1409,25 @@ const docTemplate = `{
                     },
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "BrowserSession": []
                     }
                 ],
-                "description": "Permanently deletes an item owned by the authenticated user.",
+                "description": "Permanently deletes an owned item. Missing, foreign, and previously deleted IDs all return 404. Authentication is checked before the ID.",
+                "produces": [
+                    "application/json",
+                    "text/plain"
+                ],
                 "tags": [
                     "items"
                 ],
                 "summary": "Delete item",
                 "parameters": [
                     {
+                        "minimum": 1,
                         "type": "integer",
-                        "description": "Item ID",
+                        "description": "Positive item ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1288,19 +1435,55 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "Deleted; response body is empty"
                     },
                     "400": {
-                        "description": ""
+                        "description": "invalid_id: ID must be a positive integer within the server's integer range",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     },
                     "401": {
-                        "description": ""
+                        "description": "unauthorized: missing or invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "WWW-Authenticate": {
+                                "type": "string",
+                                "description": "Basic authentication challenge for realm Restricted"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Browser-session Origin policy rejected the request; response is text/plain",
+                        "schema": {
+                            "type": "string"
+                        }
                     },
                     "404": {
-                        "description": ""
+                        "description": "not_found: item is missing or belongs to another user",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
+                    },
+                    "405": {
+                        "description": "method_not_allowed: use GET or DELETE on this path",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        },
+                        "headers": {
+                            "Allow": {
+                                "type": "string",
+                                "description": "GET, DELETE"
+                            }
+                        }
                     },
                     "500": {
-                        "description": ""
+                        "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             }
@@ -1542,6 +1725,30 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "handlers.ResourceError": {
+            "type": "object",
+            "required": [
+                "error",
+                "message"
+            ],
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "enum": [
+                        "invalid_id",
+                        "unauthorized",
+                        "not_found",
+                        "internal_error",
+                        "method_not_allowed"
+                    ],
+                    "example": "not_found"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Resource not found"
+                }
+            }
+        },
         "handlers.createFeedDTO": {
             "type": "object",
             "properties": {
