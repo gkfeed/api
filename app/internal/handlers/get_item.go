@@ -26,17 +26,21 @@ func (h *LibraryHandler) HandleGetItemByID(w http.ResponseWriter, r *http.Reques
 }
 
 // @Summary      Get item by ID
-// @Description  Returns an item and its parent feed for the authenticated user.
+// @Description  Returns an owned item and its parent feed. Missing and foreign IDs both return 404. Authentication is checked before the ID.
 // @Tags         items
 // @Produce      json
-// @Param        id path int true "Item ID"
+// @Param        id path int true "Positive item ID" minimum(1)
 // @Success      200 {object} getItemResponse
-// @Failure      400
-// @Failure      401
-// @Failure      404
-// @Failure      500
+// @Failure      400 {object} ResourceError "invalid_id: ID must be a positive integer within the server's integer range"
+// @Failure      401 {object} ResourceError "unauthorized: missing or invalid credentials"
+// @Failure      404 {object} ResourceError "not_found: item is missing or belongs to another user"
+// @Failure      405 {object} ResourceError "method_not_allowed: use GET or DELETE on this path"
+// @Failure      500 {object} ResourceError "internal_error: request failed"
+// @Header       401 {string} WWW-Authenticate "Basic authentication challenge for realm Restricted"
+// @Header       405 {string} Allow "GET, DELETE"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Router       /api/v2/items/{id} [get]
 func (h *LibraryHandler) HandleGetItemByPathID(w http.ResponseWriter, r *http.Request) {
 	h.getItem(w, r, pathID)

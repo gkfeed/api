@@ -160,7 +160,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 
 	syncHandler := libraryHandler.SyncHandler(configuration.SyncCursorSecret)
 	v2 := router.PathPrefix("/api/v2").Subrouter()
-	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListOfFeeds)).Methods(http.MethodGet)
+	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleListResourceFeeds)).Methods(http.MethodGet)
 	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
 	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleGetFeed)).Methods(http.MethodGet)
 	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleDeleteFeedByID)).Methods(http.MethodDelete)
@@ -168,7 +168,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	v2.HandleFunc("/items/sync", authenticate(syncHandler.HandleItems)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/changes", authenticate(syncHandler.HandleChanges)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleGetItemByPathID)).Methods(http.MethodGet)
-	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteItem)).Methods(http.MethodDelete)
+	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteResourceItem)).Methods(http.MethodDelete)
 
 	authRouter := api.PathPrefix("/auth").Subrouter()
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
@@ -212,7 +212,7 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 		AllowedHeaders:   []string{"*"},
 		AllowedMethods:   []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodDelete},
 		AllowCredentials: true,
-	}).Handler(router)
+	}).Handler(resourceErrors(router))
 
 	return corsHandler
 }
