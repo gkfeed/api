@@ -34,6 +34,7 @@ const (
 )
 
 type Config struct {
+	OpenRouterAPIKey  string
 	Address           string
 	DatabaseURL       string
 	AllowedOrigins    []string
@@ -78,6 +79,7 @@ func Load() (Config, error) {
 	}
 	return Config{
 		SyncCursorSecret:  syncSecret,
+		OpenRouterAPIKey:  strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")),
 		Address:           valueOrDefault(addressEnvironmentVariable, ":8086"),
 		DatabaseURL:       strings.TrimSpace(os.Getenv(databaseEnvironmentVariable)),
 		AllowedOrigins:    allowedOrigins(),

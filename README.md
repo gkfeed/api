@@ -57,6 +57,7 @@ Configuration is read from environment variables at startup:
 | `GKFEED_SYNC_CURSOR_SECRET` | Random process-local key | Sync cursor key; accepts `GKFEED_JWT_SECRET` as fallback |
 | `GKFEED_ACCESS_TTL` | `30m` | Access-token lifetime |
 | `GKFEED_JWT_REFRESH_TTL` | `2160h` | Refresh-token idle lifetime |
+| `OPENROUTER_API_KEY` | none | Enables Jev feed type detection for URL-only v2 creation. Explicit `type` or `types` works without it. |
 
 ## Docker
 
@@ -75,16 +76,15 @@ complete before selecting that input.
 
 Swagger UI is available at `/api/swagger/index.html`.
 
-The resource routes are available under `/api/v2`. Basic and Bearer credentials
-are accepted for every route below. Feed creation requires `title`, `type`, and
-`url`; repeated creation returns `200` with `created: false` and the existing
-feed. Deleting a feed also deletes its items.
+The resource routes are available under `/api/v2`. Browser sessions, Basic and
+Bearer credentials are accepted for every route below. Feed creation accepts one `url` with
+optional `title` and either `type` or `types`. Deleting a feed also deletes its items.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/v2/feeds` | List the user's feeds |
 | `GET` | `/api/v2/feeds/{id}` | Get an owned feed; missing or foreign IDs return `404` |
-| `POST` | `/api/v2/feeds` | Create a feed with explicit fields |
+| `POST` | `/api/v2/feeds` | Resolve a source and create selected subscriptions atomically |
 | `DELETE` | `/api/v2/feeds/{id}` | Delete a feed and its items |
 | `GET` | `/api/v2/items?limit=<n>&cursor=<id>` | List items with the existing cursor pagination |
 | `GET` | `/api/v2/items/sync` | Start or continue an item sync with an opaque cursor |
@@ -92,10 +92,89 @@ feed. Deleting a feed also deletes its items.
 | `GET` | `/api/v2/items/{id}` | Get an owned item and its feed |
 | `DELETE` | `/api/v2/items/{id}` | Delete an owned item |
 
-The existing v2 list and mutation responses keep their v1 JSON shapes and status codes.
+The v2 list, read and delete responses keep their v1 JSON shapes and status codes.
 `GET /api/v2/feeds/{id}` returns a feed object from the list. The v1 routes
-below remain available while clients migrate. v2 has no lazy feed creation or
-item PATCH route.
+below remain available while clients migrate. v2 has no separate lazy creation
+route or item PATCH route.
+
+### Unified v2 feed creation
+
+`POST /api/v2/feeds` accepts one absolute HTTP(S) URL without credentials.
+The URL is required; other fields are optional:
+
+```json
+{"url":"https://www.instagram.com/example","types":["inst","stories"],"title":"My source"}
+```
+
+- `type` selects exactly one subscription. For example, `"type":"inst"`
+  creates posts only, while `"type":"stories"` creates stories only.
+- `types` selects a nonempty array of distinct supported types. It cannot be
+  combined with a nonempty `type`. Results follow the selected order.
+- If neither is supplied, the API calls OpenRouter Decisions directly using
+  `typesafe/jev-1.13`, passing the URL and optional supplied title. The response
+  must name a type from the API catalog and have confidence at least `0.35`.
+  An automatically detected Instagram profile creates posts and stories.
+- The catalog returned by `GET /api/v1/feed_types` also supplies validation and
+  Jev's choice criteria. It is maintained in the API alongside parser capability
+  changes. The frontend's additional `author.today` type is not yet in this API
+  catalog; this change does not expand parser support.
+- An explicit title or supported type takes precedence over metadata. A manual
+  type is preserved even if it differs from the apparent source. Instagram
+  titles default to the profile name; other titles use Open Graph or page
+  titles, then a name derived from the URL if metadata is unavailable.
+- URL input is limited to 8192 bytes and titles to 1000 bytes. Surrounding
+  whitespace is removed from URL, title and the singular type. Invalid URLs,
+  unknown/repeated types and an empty `types` selection return `400`.
+
+The API normalizes recognized YouTube channel pages to
+`https://www.youtube.com/channel/<Channel ID>` and preserves the chosen tab.
+Channel roots, `/videos`, `/shorts` and `/streams` remain distinct subscriptions.
+Handles and `/c/` or `/user/` aliases require a verified ID from channel-page
+metadata. Conflicting or missing identity evidence fails creation. Permanent
+Channel-ID URLs need no identity lookup; video and playlist URLs are preserved.
+Instagram profile URLs normalize to HTTPS, `www.instagram.com` and a lowercase
+username, without query, fragment or trailing slash. Other URLs retain their
+path, query and fragment; host casing and default ports are normalized.
+The existing `tok.adminforge.de/@...` to `www.tiktok.com/@...` mirror conversion
+is also retained. Existing aliases and old records are not migrated or merged.
+
+The response is always `200` with a `results` array, including for one feed:
+
+```json
+{"results":[{"created":true,"item":{"id":123,"title":"My source","type":"inst","url":"https://www.instagram.com/example","userid":1}},{"created":false,"item":{"id":124,"title":"Existing name","type":"stories","url":"https://www.instagram.com/example","userid":1}}]}
+```
+
+Metadata resolution completes before the database transaction. All missing
+subscriptions are inserted in one transaction. A failure rolls back every new
+feed from that request; existing feeds and their titles stay unchanged.
+Uniqueness remains `(user_id, url, type)`. Concurrent creation and retries that
+resolve to the same canonical URL and types return the same resources, with
+`created:false` for existing ones. A retry resolves missing data again; no
+asynchronous operation, request replay cache or `Idempotency-Key` is introduced.
+
+The request has a 15-second budget; each Jev or metadata request has a 5-second
+timeout. Required resolution failures create no records:
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_creation` | Invalid URL or selection |
+| `422` | `type_required` | Jev confidence below `0.35`; pass an explicit type |
+| `502` | `detection_failed` | Jev returned an invalid answer or failed |
+| `502` | `youtube_channel_unresolved` | Channel identity could not be verified |
+| `503` | `detection_unavailable` | OpenRouter key is missing; explicit types still work |
+| `504` | `resolution_timeout` | Required resolution exceeded its deadline |
+
+These errors use `{"error":{"code":"type_required","message":"..."}}`.
+Malformed JSON and authentication/storage errors retain existing error formats.
+An optional title lookup failure uses the URL fallback. Metadata fetching
+allows public HTTP(S) destinations on ports 80/443 only, checks redirects and
+resolved addresses, and bounds response size. The OpenRouter key is never sent
+to metadata destinations or redirect targets.
+
+This replaces the previous unstable v2 creation request/response contract.
+v1 `add` and `add_lazy` retain their input, response and resolution behavior.
+Frontend migration to this operation is a separate change. No infra DDL or new
+application privileges are required.
 
 ### Legacy v1 routes
 

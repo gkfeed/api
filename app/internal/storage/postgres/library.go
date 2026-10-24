@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"gkfeed/api/internal/library"
@@ -158,7 +159,47 @@ func (r *FeedRepository) Get(ctx context.Context, userID, feedID int) (library.F
 }
 
 func (r *FeedRepository) Add(ctx context.Context, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
-	feed, err := scanFeed(r.db.QueryRowContext(ctx,
+	return addFeed(ctx, r.db, userID, input)
+}
+
+// AddBatch returns results in request order. A fixed insert order prevents
+// concurrent requests with reversed selections from deadlocking each other.
+func (r *FeedRepository) AddBatch(ctx context.Context, userID int, inputs []library.CreateFeedInput) ([]library.AddFeedResult, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, fmt.Errorf("begin feed creation: %w", err)
+	}
+	defer tx.Rollback()
+	order := make([]int, len(inputs))
+	for i := range inputs {
+		order[i] = i
+	}
+	sort.Slice(order, func(i, j int) bool {
+		a, b := inputs[order[i]], inputs[order[j]]
+		if a.URL != b.URL {
+			return a.URL < b.URL
+		}
+		return a.Type < b.Type
+	})
+	results := make([]library.AddFeedResult, len(inputs))
+	for _, i := range order {
+		results[i], err = addFeed(ctx, tx, userID, inputs[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit feed creation: %w", err)
+	}
+	return results, nil
+}
+
+type feedQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func addFeed(ctx context.Context, db feedQuerier, userID int, input library.CreateFeedInput) (library.AddFeedResult, error) {
+	feed, err := scanFeed(db.QueryRowContext(ctx,
 		"INSERT INTO feed (title, type, url, user_id) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, url, type) DO NOTHING RETURNING "+feedColumns,
 		input.Title, input.Type, input.URL, userID))
 	if err == nil {
@@ -170,7 +211,7 @@ func (r *FeedRepository) Add(ctx context.Context, userID int, input library.Crea
 	// Use a separate statement so a concurrent insert that won the conflict
 	// is visible after it commits. A no-op UPDATE would require feed UPDATE
 	// privileges, which the infra application role intentionally does not have.
-	feed, err = scanFeed(r.db.QueryRowContext(ctx, "SELECT "+feedColumns+" FROM feed WHERE user_id = $1 AND url = $2 AND type = $3", userID, input.URL, input.Type))
+	feed, err = scanFeed(db.QueryRowContext(ctx, "SELECT "+feedColumns+" FROM feed WHERE user_id = $1 AND url = $2 AND type = $3", userID, input.URL, input.Type))
 	if err != nil {
 		return library.AddFeedResult{}, fmt.Errorf("get existing feed: %w", err)
 	}

@@ -42,6 +42,41 @@ func TestFeedDeleteRollsBackOnFailure(t *testing.T) {
 	}
 }
 
+func TestFeedBatchRollsBackOnSecondInsertFailure(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("existing=%v", existing), func(t *testing.T) {
+			database := newTestDB(t)
+			feeds := NewFeedRepository(database)
+			posts := library.CreateFeedInput{Title: "Original", Type: "inst", URL: "https://www.instagram.com/example"}
+			if existing {
+				if _, err := feeds.Add(t.Context(), 1, posts); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := database.Exec(`CREATE TRIGGER reject_stories BEFORE INSERT ON feed WHEN NEW.type = 'stories' BEGIN SELECT RAISE(ABORT, 'rejected'); END`); err != nil {
+				t.Fatal(err)
+			}
+			posts.Title = "Replacement"
+			stories := posts
+			stories.Type = "stories"
+			if results, err := feeds.AddBatch(t.Context(), 1, []library.CreateFeedInput{posts, stories}); err == nil || results != nil {
+				t.Fatalf("AddBatch = %#v, %v", results, err)
+			}
+			listed, err := feeds.List(t.Context(), 1)
+			want := 0
+			if existing {
+				want = 1
+			}
+			if err != nil || len(listed) != want {
+				t.Fatalf("failed batch left records: %#v, %v", listed, err)
+			}
+			if existing && listed[0].Title != "Original" {
+				t.Fatalf("existing feed modified: %#v", listed)
+			}
+		})
+	}
+}
+
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	database, err := sql.Open("sqlite3", t.TempDir()+"/test.sqlite?_busy_timeout=5000")
