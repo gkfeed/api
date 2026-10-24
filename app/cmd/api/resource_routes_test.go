@@ -76,7 +76,7 @@ func TestV2ResourceRoutesAndV1Compatibility(t *testing.T) {
 		{http.MethodGet, "/api/v2/items/22", "other", "", 404},
 		{http.MethodGet, "/api/v1/item?id=22", "owner", "", 200},
 		{http.MethodGet, "/api/v1/list", "owner", "", 200},
-		{http.MethodPost, "/api/v2/feeds", "owner", `{"url":"https://new"}`, 400},
+		{http.MethodPost, "/api/v2/feeds", "owner", `{"url":"https://new"}`, 503},
 		{http.MethodPatch, "/api/v2/items/22", "owner", "", 405},
 	} {
 		response := call(test.method, test.path, test.username, test.body)

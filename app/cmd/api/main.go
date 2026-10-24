@@ -81,7 +81,7 @@ func run() error {
 	if err := db.CheckBrowserSessionSchema(startupCtx); err != nil {
 		return err
 	}
-	libraryHandler := buildLibraryHandler(database)
+	libraryHandler := buildLibraryHandler(database, configuration)
 
 	server := &http.Server{
 		Addr:              configuration.Address,
@@ -114,10 +114,10 @@ func run() error {
 	}
 }
 
-func buildLibraryHandler(database *sql.DB) *handlers.LibraryHandler {
+func buildLibraryHandler(database *sql.DB, configuration config.Config) *handlers.LibraryHandler {
 	feeds := storage.NewFeedRepository(database)
 	items := storage.NewItemRepository(database)
-	return handlers.NewLibraryHandler(feeds, items, services.FeedResolver{})
+	return handlers.NewLibraryHandler(feeds, items, services.FeedResolver{}, services.NewFeedCreator(configuration.OpenRouterAPIKey))
 }
 
 func newHandler(configuration config.Config, provided ...*handlers.LibraryHandler) http.Handler {
@@ -125,9 +125,9 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	if len(provided) > 0 {
 		libraryHandler = provided[0]
 	} else if database, err := db.ConfiguredDB(); err == nil {
-		libraryHandler = buildLibraryHandler(database)
+		libraryHandler = buildLibraryHandler(database, configuration)
 	} else {
-		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{})
+		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{}, services.NewFeedCreator(configuration.OpenRouterAPIKey))
 	}
 	router := mux.NewRouter()
 	sessions := auth.NewSessionStore(configuration.EffectiveAccessTokenTTL())
@@ -224,6 +224,9 @@ func (unavailableFeeds) List(context.Context, int) ([]library.Feed, error) {
 }
 func (unavailableFeeds) Add(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error) {
 	return library.AddFeedResult{}, errors.New("library storage is unavailable")
+}
+func (unavailableFeeds) AddBatch(context.Context, int, []library.CreateFeedInput) ([]library.AddFeedResult, error) {
+	return nil, errors.New("library storage is unavailable")
 }
 func (unavailableFeeds) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")

@@ -21,15 +21,20 @@ type FeedResolver interface {
 	Resolve(context.Context, string) (library.CreateFeedInput, error)
 }
 
+type FeedPreparer interface {
+	Prepare(context.Context, library.CreateFeedsInput) ([]library.CreateFeedInput, error)
+}
+
 type LibraryHandler struct {
 	service  *library.Service
 	feeds    library.FeedRepository
 	items    library.ItemRepository
 	resolver FeedResolver
+	creator  FeedPreparer
 }
 
-func NewLibraryHandler(feeds library.FeedRepository, items library.ItemRepository, resolver FeedResolver) *LibraryHandler {
-	return &LibraryHandler{service: library.NewService(feeds, items), feeds: feeds, items: items, resolver: resolver}
+func NewLibraryHandler(feeds library.FeedRepository, items library.ItemRepository, resolver FeedResolver, creator FeedPreparer) *LibraryHandler {
+	return &LibraryHandler{service: library.NewService(feeds, items), feeds: feeds, items: items, resolver: resolver, creator: creator}
 }
 
 func authenticatedUser(w http.ResponseWriter, r *http.Request) (models.User, bool) {

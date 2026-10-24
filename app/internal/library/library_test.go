@@ -17,6 +17,9 @@ func (fakeFeeds) Add(context.Context, int, CreateFeedInput) (AddFeedResult, erro
 	return AddFeedResult{}, nil
 }
 func (fakeFeeds) Delete(context.Context, int, int) error { return nil }
+func (fakeFeeds) AddBatch(context.Context, int, []CreateFeedInput) ([]AddFeedResult, error) {
+	return nil, nil
+}
 
 type fakeItems struct {
 	list     []Item

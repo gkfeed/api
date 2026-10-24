@@ -20,6 +20,7 @@ type Factory func(t *testing.T) Fixture
 func Run(t *testing.T, factory Factory) {
 	t.Helper()
 	RunFeedCreation(t, factory)
+	RunBatchFeedCreation(t, factory)
 	t.Run("ownership ordering pagination and mutations", func(t *testing.T) {
 		fixture := factory(t)
 		feeds, items := fixture.Feeds, fixture.Items
@@ -101,6 +102,88 @@ func Run(t *testing.T, factory Factory) {
 			if _, err := items.Get(ctx, 1, id); !errors.Is(err, library.ErrNotFound) {
 				t.Fatalf("cascade item %d error = %v", id, err)
 			}
+		}
+	})
+}
+
+func RunBatchFeedCreation(t *testing.T, factory Factory) {
+	t.Helper()
+	t.Run("batch existing and new subscriptions", func(t *testing.T) {
+		feeds := factory(t).Feeds
+		posts := library.CreateFeedInput{Title: "Original", Type: "inst", URL: "https://www.instagram.com/example"}
+		first, err := feeds.Add(t.Context(), 1, posts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		posts.Title = "Replacement"
+		stories := posts
+		stories.Type = "stories"
+		results, err := feeds.AddBatch(t.Context(), 1, []library.CreateFeedInput{stories, posts})
+		if err != nil || len(results) != 2 {
+			t.Fatalf("AddBatch = %#v, %v", results, err)
+		}
+		if !results[0].Created || results[0].Type != "stories" || results[1].Created || results[1].Feed != first.Feed {
+			t.Fatalf("results = %#v", results)
+		}
+		repeat, err := feeds.AddBatch(t.Context(), 1, []library.CreateFeedInput{posts, stories})
+		if err != nil || len(repeat) != 2 || repeat[0].Created || repeat[1].Created || repeat[0].ID != first.ID || repeat[1].ID != results[0].ID {
+			t.Fatalf("repeat = %#v, %v", repeat, err)
+		}
+		other, err := feeds.AddBatch(t.Context(), 2, []library.CreateFeedInput{posts, stories})
+		if err != nil || len(other) != 2 || !other[0].Created || !other[1].Created || other[0].ID == first.ID {
+			t.Fatalf("other user = %#v, %v", other, err)
+		}
+	})
+	t.Run("concurrent reversed batches", func(t *testing.T) {
+		feeds := factory(t).Feeds
+		const count = 12
+		results := make([][]library.AddFeedResult, count)
+		errs := make([]error, count)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := range count {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				inputs := []library.CreateFeedInput{{Title: "Posts", Type: "inst", URL: "https://www.instagram.com/example"}, {Title: "Stories", Type: "stories", URL: "https://www.instagram.com/example"}}
+				if i%2 == 1 {
+					inputs[0], inputs[1] = inputs[1], inputs[0]
+				}
+				results[i], errs[i] = feeds.AddBatch(t.Context(), 1, inputs)
+			}()
+		}
+		close(start)
+		wg.Wait()
+		created := map[library.FeedType]int{}
+		ids := map[library.FeedType]int{}
+		for i, batch := range results {
+			if errs[i] != nil || len(batch) != 2 {
+				t.Fatalf("batch %d = %#v, %v", i, batch, errs[i])
+			}
+			for j, result := range batch {
+				wantType := library.FeedType("inst")
+				if (i+j)%2 == 1 {
+					wantType = "stories"
+				}
+				if result.Type != wantType {
+					t.Fatalf("result order = %#v", batch)
+				}
+				if result.Created {
+					created[result.Type]++
+				}
+				if id := ids[result.Type]; id != 0 && id != result.ID {
+					t.Fatal("duplicate identity")
+				}
+				ids[result.Type] = result.ID
+			}
+		}
+		if created["inst"] != 1 || created["stories"] != 1 {
+			t.Fatalf("created = %#v", created)
+		}
+		listed, err := feeds.List(t.Context(), 1)
+		if err != nil || len(listed) != 2 {
+			t.Fatalf("listed = %#v, %v", listed, err)
 		}
 	})
 }

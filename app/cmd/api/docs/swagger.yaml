@@ -26,6 +26,38 @@ definitions:
       url:
         type: string
     type: object
+  handlers.createFeedsDTO:
+    properties:
+      title:
+        type: string
+      type:
+        type: string
+      types:
+        items:
+          type: string
+        type: array
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  handlers.feedCreationError:
+    properties:
+      error:
+        properties:
+          code:
+            type: string
+          message:
+            type: string
+        type: object
+    type: object
+  handlers.feedCreationResponse:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/handlers.feedMutationResponse'
+        type: array
+    type: object
   handlers.feedDTO:
     properties:
       id:
@@ -754,32 +786,50 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a feed with explicit title, type, and URL. Repeated creation
-        returns the existing feed.
+      description: Resolves missing metadata and creates all selected subscriptions
+        atomically. Explicit type or types overrides automatic selection. Repeats
+        return existing feeds without changing them.
       parameters:
-      - description: Feed to create (title, type, url required)
+      - description: One source URL, optional title and either type or types
         in: body
         name: feed
         required: true
         schema:
-          $ref: '#/definitions/handlers.createFeedDTO'
+          $ref: '#/definitions/handlers.createFeedsDTO'
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.feedMutationResponse'
-        '400':
-          description: ''
-        '401':
-          description: ''
-        '500':
-          description: ''
+            $ref: '#/definitions/handlers.feedCreationResponse'
+        "400":
+          description: ""
+        "401":
+          description: ""
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.feedCreationError'
+        "500":
+          description: ""
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.feedCreationError'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.feedCreationError'
+        "504":
+          description: Gateway Timeout
+          schema:
+            $ref: '#/definitions/handlers.feedCreationError'
       security:
       - BasicAuth: []
       - BearerAuth: []
-      summary: Create feed
+      - BrowserSession: []
+      summary: Create subscriptions from a source URL
       tags:
       - feeds
   /api/v2/feeds/{id}:

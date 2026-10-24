@@ -928,9 +928,12 @@ const docTemplate = `{
                     },
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "BrowserSession": []
                     }
                 ],
-                "description": "Creates a feed with explicit title, type, and URL. Repeated creation returns the existing feed.",
+                "description": "Resolves missing metadata and creates all selected subscriptions atomically. Explicit type or types overrides automatic selection. Repeats return existing feeds without changing them.",
                 "consumes": [
                     "application/json"
                 ],
@@ -940,15 +943,15 @@ const docTemplate = `{
                 "tags": [
                     "feeds"
                 ],
-                "summary": "Create feed",
+                "summary": "Create subscriptions from a source URL",
                 "parameters": [
                     {
-                        "description": "Feed to create (title, type, url required)",
+                        "description": "One source URL, optional title and either type or types",
                         "name": "feed",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createFeedDTO"
+                            "$ref": "#/definitions/handlers.createFeedsDTO"
                         }
                     }
                 ],
@@ -956,7 +959,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.feedMutationResponse"
+                            "$ref": "#/definitions/handlers.feedCreationResponse"
                         }
                     },
                     "400": {
@@ -965,8 +968,32 @@ const docTemplate = `{
                     "401": {
                         "description": ""
                     },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.feedCreationError"
+                        }
+                    },
                     "500": {
                         "description": ""
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.feedCreationError"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.feedCreationError"
+                        }
+                    },
+                    "504": {
+                        "description": "Gateway Timeout",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.feedCreationError"
+                        }
                     }
                 }
             }
@@ -1733,6 +1760,56 @@ const docTemplate = `{
                 },
                 "url": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.createFeedsDTO": {
+            "type": "object",
+            "required": [
+                "url"
+            ],
+            "properties": {
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.feedCreationError": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string"
+                        },
+                        "message": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "handlers.feedCreationResponse": {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.feedMutationResponse"
+                    }
                 }
             }
         },

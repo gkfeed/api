@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"gkfeed/api/internal/library"
+	"gkfeed/api/internal/services"
 )
 
 type fakeLibraryState struct {
 	addFeed    func(context.Context, int, library.CreateFeedInput) (library.AddFeedResult, error)
+	addBatch   func(context.Context, int, []library.CreateFeedInput) ([]library.AddFeedResult, error)
 	deleteFeed func(context.Context, int, int) error
 	deleteItem func(context.Context, int, int) error
 	listFeeds  []library.Feed
@@ -19,6 +21,10 @@ type fakeLibraryState struct {
 }
 
 type fakeFeedRepository struct{ state *fakeLibraryState }
+
+func (r fakeFeedRepository) AddBatch(ctx context.Context, userID int, inputs []library.CreateFeedInput) ([]library.AddFeedResult, error) {
+	return r.state.addBatch(ctx, userID, inputs)
+}
 
 func (r fakeFeedRepository) List(context.Context, int) ([]library.Feed, error) {
 	return r.state.listFeeds, nil
@@ -52,7 +58,7 @@ func (r fakeItemRepository) Delete(ctx context.Context, userID, itemID int) erro
 }
 
 func newTestLibraryHandler(state *fakeLibraryState, resolver FeedResolver) *LibraryHandler {
-	return NewLibraryHandler(fakeFeedRepository{state}, fakeItemRepository{state}, resolver)
+	return NewLibraryHandler(fakeFeedRepository{state}, fakeItemRepository{state}, resolver, services.NewFeedCreator(""))
 }
 
 func (r fakeFeedRepository) Get(ctx context.Context, userID, feedID int) (library.Feed, error) {

@@ -225,6 +225,23 @@ func TestResourceErrorsPreserveOtherRoutes(t *testing.T) {
 	}
 }
 
+func TestResourceErrorsPreserveFeedCreationContract(t *testing.T) {
+	resourceTestDatabase(t)
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/feeds", strings.NewReader(`{"url":"not-a-url"}`))
+	request.SetBasicAuth("owner", "secret")
+	response := httptest.NewRecorder()
+	newHandler(config.Config{}).ServeHTTP(response, request)
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); response.Code != 400 || err != nil || body.Error.Code != "invalid_creation" || body.Error.Message == "" || response.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("feed creation error = %d %v %s, %v", response.Code, response.Header(), response.Body.String(), err)
+	}
+}
+
 func TestResourceErrorsPreserveBrowserSessionPolicyAndCookies(t *testing.T) {
 	_, cfg := browserFixture(t)
 	handler := newHandler(cfg)
