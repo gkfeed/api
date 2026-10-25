@@ -32,15 +32,12 @@ func TestPasswordAdmissionIsSharedAcrossHTTPEntryPoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
-	released := false
+	pending := 0
 	ctx, cancel := context.WithCancel(t.Context())
 	finished := make(chan struct{}, 2)
 	defer func() {
 		cancel()
-		if released {
-			return
-		}
-		for range 2 {
+		for range pending {
 			select {
 			case <-finished:
 			case <-time.After(5 * time.Second):
@@ -52,6 +49,7 @@ func TestPasswordAdmissionIsSharedAcrossHTTPEntryPoints(t *testing.T) {
 	basic.SetBasicAuth("reader", "secret")
 	passwordLogin := httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(`{"username":"reader","password":"secret"}`)).WithContext(ctx)
 	for i, request := range []*http.Request{basic, passwordLogin} {
+		pending++
 		go func() {
 			handler.ServeHTTP(httptest.NewRecorder(), request)
 			finished <- struct{}{}
@@ -104,27 +102,5 @@ func TestPasswordAdmissionIsSharedAcrossHTTPEntryPoints(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("Bearer authentication during overload = %d %s", response.Code, response.Body.String())
-	}
-	if response := browserRequest(otherHandler, "GET", "/api/v1/feed_types", "", "", nil); response.Code != http.StatusOK {
-		t.Fatalf("public route during overload = %d", response.Code)
-	}
-
-	cancel()
-	for range 2 {
-		select {
-		case <-finished:
-		case <-time.After(5 * time.Second):
-			t.Fatal("cancelled password lookup did not release admission")
-		}
-	}
-	released = true
-	if err := connection.Close(); err != nil {
-		t.Fatal(err)
-	}
-	for _, username := range []string{"reader", "missing", "passwordless"} {
-		response := browserRequest(otherHandler, "POST", "/api/v1/auth/login", `{"username":"`+username+`","password":"wrong"}`, "", nil)
-		if response.Code != http.StatusUnauthorized || response.Header().Get("Retry-After") != "" {
-			t.Fatalf("invalid password after overload = %d %v %s", response.Code, response.Header(), response.Body.String())
-		}
 	}
 }

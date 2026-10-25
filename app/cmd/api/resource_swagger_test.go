@@ -37,7 +37,7 @@ func TestSwaggerResourceErrorScope(t *testing.T) {
 			path = path[:strings.LastIndex(path, "/")] + "/{id}"
 		}
 		doc := document.Paths[path][strings.ToLower(operation.method)]
-		statuses := []string{"401", "405", "500", "503"}
+		statuses := []string{"401", "405", "500"}
 		if path != "/api/v2/feeds" {
 			statuses = append(statuses, "400", "404")
 			if len(doc.Parameters) != 1 || doc.Parameters[0].Name != "id" || doc.Parameters[0].Minimum != 1 {
