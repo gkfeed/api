@@ -258,6 +258,15 @@ contract described in [`docs/browser-sessions.md`](docs/browser-sessions.md).
 | `POST` | `/api/v1/auth/logout` | Refresh token | Revoke the refresh-token family |
 | `POST` | `/api/v1/auth/logout-all` | Basic, Bearer or cookie | Revoke all sessions for the authenticated user |
 
+`POST /api/v1/add` requires `title`, `type` and `url`. Surrounding whitespace
+is removed from all three fields. JSON `null`, an empty object, and any missing,
+null, empty or whitespace-only required field return `400` before storage is
+called. These errors use the existing v1 plain-text format. Legacy creation
+keeps the caller's explicit type and URL without v2 catalog validation or
+metadata resolution. Successful requests still return `200` with
+`{"created":true,"item":{...}}`; duplicates return the stored feed with
+`created:false`.
+
 Browser sessions survive API restarts and browser closure. They expire after 30
 days of inactivity, with an absolute limit of 90 days. Unsafe cookie requests
 require an allowed `Origin`. See the [browser session contract](docs/browser-sessions.md)
