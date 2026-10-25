@@ -9,8 +9,8 @@ import (
 	"gkfeed/api/internal/models"
 )
 
-func GetUserFromDB(ctx context.Context, name string) (models.User, error) {
-	database, err := getDB()
+func (r *UserRepository) GetUserFromDB(ctx context.Context, name string) (models.User, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return models.User{}, fmt.Errorf("open database: %w", err)
 	}
@@ -29,8 +29,8 @@ func GetUserFromDB(ctx context.Context, name string) (models.User, error) {
 	return user, nil
 }
 
-func GetUserFromDBByID(ctx context.Context, id int) (models.User, error) {
-	database, err := getDB()
+func (r *UserRepository) GetUserFromDBByID(ctx context.Context, id int) (models.User, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return models.User{}, fmt.Errorf("open database: %w", err)
 	}

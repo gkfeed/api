@@ -83,16 +83,16 @@ func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
 				t.Fatal(err)
 			}
 			database.SetMaxOpenConns(2)
-			db.Configure(database)
-			t.Cleanup(func() { db.Configure(nil); database.Close() })
+			t.Cleanup(func() { database.Close() })
 			testschema.Init(t, database)
 			if _, err := database.Exec("INSERT INTO users (id,name) VALUES (1,'reader')"); err != nil {
 				t.Fatal(err)
 			}
 			sessions := auth.NewSessionStore(time.Hour)
-			h := NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
+			repositories := AuthRepositories{RefreshTokens: db.NewRefreshTokenRepository(database), BrowserSessions: db.NewBrowserSessionRepository(database)}
+			h := NewAuthHandler(config.Config{}, nil, sessions, repositories)
 			// Main creates another handler for passkeys. It must share the same lock.
-			revoker := NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
+			revoker := NewAuthHandler(config.Config{}, nil, sessions, repositories)
 			tokens, err := h.issueTokenPair(t.Context(), models.User{ID: 1, Name: "reader"})
 			if err != nil {
 				t.Fatal(err)
@@ -186,7 +186,7 @@ func TestTokenHandlersCancelLifecycleWait(t *testing.T) {
 	for _, flow := range []string{"issue", "refresh", "logout", "logout-all"} {
 		t.Run(flow, func(t *testing.T) {
 			sessions := auth.NewSessionStore(time.Hour)
-			h := NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
+			h := NewAuthHandler(config.Config{}, nil, sessions, AuthRepositories{})
 			unlock, err := sessions.LockLifecycle(t.Context())
 			if err != nil {
 				t.Fatal(err)

@@ -5,15 +5,22 @@ import (
 	"database/sql"
 	"errors"
 
-	"gkfeed/api/internal/db"
 	"gkfeed/api/internal/models"
 	"gkfeed/api/internal/passwordhash"
 )
 
-var getUser = db.GetUserFromDB
+type PasswordUserRepository interface {
+	GetUserFromDB(context.Context, string) (models.User, error)
+}
 
-func authenticateWithDB(ctx context.Context, username, password string) (models.User, bool, error) {
-	user, err := getUser(ctx, username)
+type PasswordAuthenticator struct{ users PasswordUserRepository }
+
+func NewPasswordAuthenticator(users PasswordUserRepository) *PasswordAuthenticator {
+	return &PasswordAuthenticator{users: users}
+}
+
+func (a *PasswordAuthenticator) AuthenticatePassword(ctx context.Context, username, password string) (models.User, bool, error) {
+	user, err := a.users.GetUserFromDB(ctx, username)
 	if errors.Is(err, sql.ErrNoRows) {
 		return models.User{}, false, nil
 	}
@@ -23,8 +30,4 @@ func authenticateWithDB(ctx context.Context, username, password string) (models.
 
 	authenticated := user.HashedPassword.Valid && passwordhash.ComparePassword(user.HashedPassword.String, password)
 	return user, authenticated, nil
-}
-
-func AuthenticatePassword(ctx context.Context, username, password string) (models.User, bool, error) {
-	return authenticateWithDB(ctx, username, password)
 }

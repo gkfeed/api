@@ -71,21 +71,17 @@ func run() error {
 		return fmt.Errorf("connect database: %w", err)
 	}
 
-	// TODO: replace legacy auth package configuration with constructor-injected repositories.
-	db.Configure(database)
-	defer db.Configure(nil)
-
 	if err := storage.CheckSchema(startupCtx, database); err != nil {
 		return err
 	}
-	if err := db.CheckBrowserSessionSchema(startupCtx); err != nil {
+	if err := db.NewBrowserSessionRepository(database).CheckBrowserSessionSchema(startupCtx); err != nil {
 		return err
 	}
 	libraryHandler := buildLibraryHandler(database, configuration)
 
 	server := &http.Server{
 		Addr:              configuration.Address,
-		Handler:           newHandler(configuration, libraryHandler),
+		Handler:           newHandler(configuration, database, libraryHandler),
 		ReadHeaderTimeout: configuration.ReadHeaderTimeout,
 	}
 	log.Printf("listening on %s", configuration.Address)
@@ -120,19 +116,26 @@ func buildLibraryHandler(database *sql.DB, configuration config.Config) *handler
 	return handlers.NewLibraryHandler(feeds, items, services.FeedResolver{}, services.NewFeedCreator(configuration.OpenRouterAPIKey))
 }
 
-func newHandler(configuration config.Config, provided ...*handlers.LibraryHandler) http.Handler {
+func newHandler(configuration config.Config, database *sql.DB, provided ...*handlers.LibraryHandler) http.Handler {
 	var libraryHandler *handlers.LibraryHandler
 	if len(provided) > 0 {
 		libraryHandler = provided[0]
-	} else if database, err := db.ConfiguredDB(); err == nil {
+	} else if database != nil {
 		libraryHandler = buildLibraryHandler(database, configuration)
 	} else {
 		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{}, services.NewFeedCreator(configuration.OpenRouterAPIKey))
 	}
 	router := mux.NewRouter()
 	sessions := auth.NewSessionStore(configuration.EffectiveAccessTokenTTL())
-	browserSessions := auth.NewBrowserSessionStore(configuration.AllowedOrigins)
-	legacyAuthenticate := auth.Authenticate(sessions)
+	users := db.NewUserRepository(database)
+	credentials := db.NewCredentialRepository(database)
+	repositories := handlers.AuthRepositories{
+		Users: users, Credentials: credentials,
+		RefreshTokens:   db.NewRefreshTokenRepository(database),
+		BrowserSessions: db.NewBrowserSessionRepository(database),
+	}
+	browserSessions := auth.NewBrowserSessionStore(configuration.AllowedOrigins, repositories.BrowserSessions)
+	legacyAuthenticate := auth.NewPasswordAuthenticator(users).Authenticate(sessions)
 	authenticate := func(handler http.HandlerFunc) http.HandlerFunc {
 		return browserSessions.WithFallback(handler, legacyAuthenticate(handler))
 	}
@@ -173,14 +176,14 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	authRouter := api.PathPrefix("/auth").Subrouter()
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
 
-	authHandler := handlers.NewAuthHandlerWithSessions(configuration, nil, sessions)
+	authHandler := handlers.NewAuthHandler(configuration, nil, sessions, repositories)
 	authRouter.HandleFunc("/login", authHandler.Login).Methods(http.MethodPost)
 	authRouter.HandleFunc("/refresh", authHandler.Refresh).Methods(http.MethodPost)
 	authRouter.HandleFunc("/logout", authHandler.Logout).Methods(http.MethodPost)
 	authRouter.HandleFunc("/logout-all", authenticate(authHandler.LogoutAll)).Methods(http.MethodPost)
 
-	if webAuthnService, err := auth.NewWebAuthnService(configuration); err == nil {
-		authHandler = handlers.NewAuthHandlerWithSessions(configuration, webAuthnService, sessions)
+	if webAuthnService, err := auth.NewWebAuthnService(configuration, users, credentials); err == nil {
+		authHandler = handlers.NewAuthHandler(configuration, webAuthnService, sessions, repositories)
 
 		authRouter.HandleFunc("/register/begin", authenticate(authHandler.BeginRegistration)).Methods(http.MethodPost)
 		authRouter.HandleFunc("/register/finish", authenticate(authHandler.FinishRegistration)).Methods(http.MethodPost)

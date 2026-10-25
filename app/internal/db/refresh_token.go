@@ -36,8 +36,8 @@ func refreshID(hash, family []byte) string {
 func refreshPrefix(hash []byte) string   { return hex.EncodeToString(hash) + ":%" }
 func familyPattern(family []byte) string { return "%:" + hex.EncodeToString(family) }
 
-func CreateAuthRefreshToken(ctx context.Context, userID int, tokenHash, familyID []byte, expiresAt time.Time) error {
-	tx, err := beginRefreshTransaction(ctx)
+func (r *RefreshTokenRepository) CreateAuthRefreshToken(ctx context.Context, userID int, tokenHash, familyID []byte, expiresAt time.Time) error {
+	tx, err := r.beginRefreshTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -49,8 +49,8 @@ func CreateAuthRefreshToken(ctx context.Context, userID int, tokenHash, familyID
 	return tx.Commit()
 }
 
-func RotateAuthRefreshToken(ctx context.Context, oldHash, newHash []byte, now, expiresAt time.Time) (RefreshRotation, error) {
-	tx, err := beginRefreshTransaction(ctx)
+func (r *RefreshTokenRepository) RotateAuthRefreshToken(ctx context.Context, oldHash, newHash []byte, now, expiresAt time.Time) (RefreshRotation, error) {
+	tx, err := r.beginRefreshTransaction(ctx)
 	if err != nil {
 		return RefreshRotation{}, err
 	}
@@ -101,8 +101,8 @@ func RotateAuthRefreshToken(ctx context.Context, oldHash, newHash []byte, now, e
 	return rotation, nil
 }
 
-func RevokeAuthRefreshToken(ctx context.Context, tokenHash []byte, _ time.Time) ([]byte, error) {
-	tx, err := beginRefreshTransaction(ctx)
+func (r *RefreshTokenRepository) RevokeAuthRefreshToken(ctx context.Context, tokenHash []byte, _ time.Time) ([]byte, error) {
+	tx, err := r.beginRefreshTransaction(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +132,8 @@ func RevokeAuthRefreshToken(ctx context.Context, tokenHash []byte, _ time.Time) 
 	return family, nil
 }
 
-func RevokeUserAuthRefreshTokens(ctx context.Context, userID int, _ time.Time) error {
-	tx, err := beginRefreshTransaction(ctx)
+func (r *RefreshTokenRepository) RevokeUserAuthRefreshTokens(ctx context.Context, userID int, _ time.Time) error {
+	tx, err := r.beginRefreshTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,8 +147,8 @@ func RevokeUserAuthRefreshTokens(ctx context.Context, userID int, _ time.Time) e
 // All refresh mutations take one transaction lock. This keeps family
 // revocation, logout, and rotation ordered even though the application role
 // has no UPDATE permission on the infra-owned refresh_tokens table.
-func beginRefreshTransaction(ctx context.Context) (*sql.Tx, error) {
-	database, err := getDB()
+func (r *RefreshTokenRepository) beginRefreshTransaction(ctx context.Context) (*sql.Tx, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

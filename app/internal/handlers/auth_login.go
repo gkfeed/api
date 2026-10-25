@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"gkfeed/api/internal/auth"
-
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -38,7 +36,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, authenticated, err := auth.AuthenticatePassword(r.Context(), req.Username, req.Password)
+	user, authenticated, err := h.passwords.AuthenticatePassword(r.Context(), req.Username, req.Password)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return

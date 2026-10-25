@@ -21,11 +21,12 @@ const (
 )
 
 type BrowserSessionStore struct {
-	origins []string
+	origins    []string
+	repository BrowserSessionRepository
 }
 
-func NewBrowserSessionStore(origins []string) *BrowserSessionStore {
-	return &BrowserSessionStore{origins: slices.Clone(origins)}
+func NewBrowserSessionStore(origins []string, repository BrowserSessionRepository) *BrowserSessionStore {
+	return &BrowserSessionStore{origins: slices.Clone(origins), repository: repository}
 }
 
 func (s *BrowserSessionStore) Create(ctx context.Context, user models.User) (string, time.Time, error) {
@@ -35,7 +36,7 @@ func (s *BrowserSessionStore) Create(ctx context.Context, user models.User) (str
 	}
 	now := time.Now().UTC()
 	expiresAt := now.Add(BrowserSessionMaxTTL)
-	if err := db.CreateBrowserSession(ctx, DigestToken(token), user.ID, now, expiresAt); err != nil {
+	if err := s.repository.CreateBrowserSession(ctx, DigestToken(token), user.ID, now, expiresAt); err != nil {
 		return "", time.Time{}, err
 	}
 	return token, expiresAt, nil
@@ -87,7 +88,7 @@ func (s *BrowserSessionStore) Authenticate(handler http.HandlerFunc) http.Handle
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		user, expiresAt, err := db.TouchBrowserSession(r.Context(), DigestToken(cookie.Value), time.Now().UTC(), BrowserSessionIdleTTL)
+		user, expiresAt, err := s.repository.TouchBrowserSession(r.Context(), DigestToken(cookie.Value), time.Now().UTC(), BrowserSessionIdleTTL)
 		if errors.Is(err, db.ErrInvalidBrowserSession) {
 			s.ClearCookie(w)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -135,4 +136,12 @@ func minTime(a, b time.Time) time.Time {
 		return a
 	}
 	return b
+}
+
+func (s *BrowserSessionStore) Delete(ctx context.Context, hash []byte) error {
+	return s.repository.DeleteBrowserSession(ctx, hash)
+}
+
+func (s *BrowserSessionStore) DeleteUser(ctx context.Context, userID int) error {
+	return s.repository.DeleteUserBrowserSessions(ctx, userID)
 }

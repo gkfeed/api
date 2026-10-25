@@ -10,8 +10,8 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-func AddWebAuthnCredential(ctx context.Context, userID int, credential webauthn.Credential, name string) error {
-	database, err := getDB()
+func (r *CredentialRepository) AddWebAuthnCredential(ctx context.Context, userID int, credential webauthn.Credential, name string) error {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -30,8 +30,8 @@ func AddWebAuthnCredential(ctx context.Context, userID int, credential webauthn.
 	return nil
 }
 
-func UpdateWebAuthnCredential(ctx context.Context, credential webauthn.Credential) error {
-	database, err := getDB()
+func (r *CredentialRepository) UpdateWebAuthnCredential(ctx context.Context, credential webauthn.Credential) error {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -50,8 +50,8 @@ func UpdateWebAuthnCredential(ctx context.Context, credential webauthn.Credentia
 	return nil
 }
 
-func GetWebAuthnCredentialsByUserID(ctx context.Context, userID int) ([]webauthn.Credential, error) {
-	database, err := getDB()
+func (r *CredentialRepository) GetWebAuthnCredentialsByUserID(ctx context.Context, userID int) ([]webauthn.Credential, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -79,8 +79,8 @@ func GetWebAuthnCredentialsByUserID(ctx context.Context, userID int) ([]webauthn
 	return credentials, nil
 }
 
-func GetWebAuthnUserIDByCredentialID(ctx context.Context, credentialID []byte) (int, error) {
-	database, err := getDB()
+func (r *CredentialRepository) GetWebAuthnUserIDByCredentialID(ctx context.Context, credentialID []byte) (int, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return 0, fmt.Errorf("open database: %w", err)
 	}
@@ -98,8 +98,8 @@ func GetWebAuthnUserIDByCredentialID(ctx context.Context, credentialID []byte) (
 	return userID, nil
 }
 
-func DeleteWebAuthnCredential(ctx context.Context, credentialID []byte, userID int) (bool, error) {
-	database, err := getDB()
+func (r *CredentialRepository) DeleteWebAuthnCredential(ctx context.Context, credentialID []byte, userID int) (bool, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return false, fmt.Errorf("open database: %w", err)
 	}
@@ -117,8 +117,8 @@ func DeleteWebAuthnCredential(ctx context.Context, credentialID []byte, userID i
 	return rows > 0, nil
 }
 
-func ListUserWebAuthnCredentials(ctx context.Context, userID int) ([]WebAuthnCredentialInfo, error) {
-	database, err := getDB()
+func (r *CredentialRepository) ListUserWebAuthnCredentials(ctx context.Context, userID int) ([]WebAuthnCredentialInfo, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

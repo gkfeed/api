@@ -45,6 +45,12 @@ make check
 `make lint` runs `go vet` and the same `gopls` diagnostics used by Go editor
 integrations. Install `gopls` first with `make install-lint`.
 
+Auth persistence uses constructor-injected user, WebAuthn credential,
+refresh-token and browser-session repositories. Each repository borrows the
+SQL pool owned by `cmd/api`; tests use their own pools or lookup fakes. There is
+no process-wide auth database configuration. Password and passkey handlers
+share one access-session store and lifecycle lock within each router.
+
 ## Configuration
 
 Configuration is read from environment variables at startup:

@@ -8,7 +8,9 @@ import (
 )
 
 func TestBrowserSessionExpiryAndActivity(t *testing.T) {
+	t.Parallel()
 	database := useTestDatabase(t)
+	browserSessions := NewBrowserSessionRepository(database)
 	now := time.Now().UTC().Truncate(time.Second)
 	idle := 30 * 24 * time.Hour
 	maximum := 90 * 24 * time.Hour
@@ -26,10 +28,10 @@ func TestBrowserSessionExpiryAndActivity(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			hash := []byte(test.name)
-			if err := CreateBrowserSession(t.Context(), hash, 1, test.seen, test.expiry); err != nil {
+			if err := browserSessions.CreateBrowserSession(t.Context(), hash, 1, test.seen, test.expiry); err != nil {
 				t.Fatal(err)
 			}
-			user, expiresAt, err := TouchBrowserSession(t.Context(), hash, now, idle)
+			user, expiresAt, err := browserSessions.TouchBrowserSession(t.Context(), hash, now, idle)
 			if !test.valid {
 				if !errors.Is(err, ErrInvalidBrowserSession) {
 					t.Fatalf("expired session = %v", err)
@@ -49,11 +51,11 @@ func TestBrowserSessionExpiryAndActivity(t *testing.T) {
 			}
 			// Continuous activity can renew the idle limit but never the absolute limit.
 			for day := 29; day < 90; day += 29 {
-				if _, expiry, err := TouchBrowserSession(t.Context(), hash, now.Add(time.Duration(day)*24*time.Hour), idle); err != nil || !expiry.Equal(test.expiry) {
+				if _, expiry, err := browserSessions.TouchBrowserSession(t.Context(), hash, now.Add(time.Duration(day)*24*time.Hour), idle); err != nil || !expiry.Equal(test.expiry) {
 					t.Fatalf("day %d = %v, %v", day, expiry, err)
 				}
 			}
-			if _, _, err := TouchBrowserSession(t.Context(), hash, test.expiry, idle); !errors.Is(err, ErrInvalidBrowserSession) {
+			if _, _, err := browserSessions.TouchBrowserSession(t.Context(), hash, test.expiry, idle); !errors.Is(err, ErrInvalidBrowserSession) {
 				t.Fatalf("maximum lifetime = %v", err)
 			}
 		})
@@ -61,31 +63,35 @@ func TestBrowserSessionExpiryAndActivity(t *testing.T) {
 }
 
 func TestBrowserSessionDeleteCannotBeRestored(t *testing.T) {
-	useTestDatabase(t)
+	t.Parallel()
+	database := useTestDatabase(t)
+	browserSessions := NewBrowserSessionRepository(database)
 	hash := []byte("deleted")
 	now := time.Now().UTC()
-	if err := CreateBrowserSession(t.Context(), hash, 1, now, now.Add(time.Hour)); err != nil {
+	if err := browserSessions.CreateBrowserSession(t.Context(), hash, 1, now, now.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if err := DeleteBrowserSession(t.Context(), hash); err != nil {
+		if err := browserSessions.DeleteBrowserSession(t.Context(), hash); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := TouchBrowserSession(t.Context(), hash, now, time.Hour); !errors.Is(err, ErrInvalidBrowserSession) {
+		if _, _, err := browserSessions.TouchBrowserSession(t.Context(), hash, now, time.Hour); !errors.Is(err, ErrInvalidBrowserSession) {
 			t.Fatalf("deleted session accepted: %v", err)
 		}
 	}
 }
 
 func TestCheckBrowserSessionSchema(t *testing.T) {
+	t.Parallel()
 	database := useTestDatabase(t)
-	if err := CheckBrowserSessionSchema(t.Context()); err != nil {
+	browserSessions := NewBrowserSessionRepository(database)
+	if err := browserSessions.CheckBrowserSessionSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.Exec("DROP TABLE browser_sessions"); err != nil {
 		t.Fatal(err)
 	}
-	if err := CheckBrowserSessionSchema(t.Context()); err == nil {
+	if err := browserSessions.CheckBrowserSessionSchema(t.Context()); err == nil {
 		t.Fatal("missing browser_sessions accepted")
 	}
 }

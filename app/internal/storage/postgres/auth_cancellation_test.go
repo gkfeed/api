@@ -24,15 +24,17 @@ func TestPostgresRefreshCancellation(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			admin, app := postgresFixture(t)
-			db.Configure(app)
-			t.Cleanup(func() { db.Configure(nil) })
+
 			family := []byte("cancellation-family")
-			if err := db.CreateAuthRefreshToken(t.Context(), 1, auth.DigestToken("original-refresh"), family, time.Now().Add(time.Hour)); err != nil {
+			if err := db.NewRefreshTokenRepository(app).CreateAuthRefreshToken(t.Context(), 1, auth.DigestToken("original-refresh"), family, time.Now().Add(time.Hour)); err != nil {
 				t.Fatal(err)
 			}
 			sessions := auth.NewSessionStore(time.Hour)
 			sessions.Add("original-access", models.User{ID: 1, Name: "owner"}, family)
-			h := handlers.NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
+			h := handlers.NewAuthHandler(config.Config{}, nil, sessions, handlers.AuthRepositories{
+				Users: db.NewUserRepository(app), Credentials: db.NewCredentialRepository(app),
+				RefreshTokens: db.NewRefreshTokenRepository(app), BrowserSessions: db.NewBrowserSessionRepository(app),
+			})
 
 			blocker, err := admin.BeginTx(t.Context(), nil)
 			if err != nil {

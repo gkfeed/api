@@ -12,8 +12,8 @@ import (
 
 var ErrInvalidBrowserSession = errors.New("invalid browser session")
 
-func CreateBrowserSession(ctx context.Context, hash []byte, userID int, now, expiresAt time.Time) error {
-	database, err := getDB()
+func (r *BrowserSessionRepository) CreateBrowserSession(ctx context.Context, hash []byte, userID int, now, expiresAt time.Time) error {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return err
 	}
@@ -24,8 +24,8 @@ func CreateBrowserSession(ctx context.Context, hash []byte, userID int, now, exp
 
 // TouchBrowserSession checks expiry and advances activity in the same statement.
 // A concurrent delete cannot be undone by a late authentication request.
-func TouchBrowserSession(ctx context.Context, hash []byte, now time.Time, idleTTL time.Duration) (models.User, time.Time, error) {
-	database, err := getDB()
+func (r *BrowserSessionRepository) TouchBrowserSession(ctx context.Context, hash []byte, now time.Time, idleTTL time.Duration) (models.User, time.Time, error) {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return models.User{}, time.Time{}, err
 	}
@@ -55,8 +55,8 @@ func TouchBrowserSession(ctx context.Context, hash []byte, now time.Time, idleTT
 	return user, expiresAt, nil
 }
 
-func DeleteBrowserSession(ctx context.Context, hash []byte) error {
-	database, err := getDB()
+func (r *BrowserSessionRepository) DeleteBrowserSession(ctx context.Context, hash []byte) error {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return err
 	}
@@ -66,8 +66,8 @@ func DeleteBrowserSession(ctx context.Context, hash []byte) error {
 
 // Infra owns DDL. Fail before serving requests if its browser-session contract
 // has not been installed or the API role cannot read the required columns.
-func CheckBrowserSessionSchema(ctx context.Context) error {
-	database, err := getDB()
+func (r *BrowserSessionRepository) CheckBrowserSessionSchema(ctx context.Context) error {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return err
 	}
@@ -79,8 +79,8 @@ func CheckBrowserSessionSchema(ctx context.Context) error {
 	return rows.Close()
 }
 
-func DeleteUserBrowserSessions(ctx context.Context, userID int) error {
-	database, err := getDB()
+func (r *BrowserSessionRepository) DeleteUserBrowserSessions(ctx context.Context, userID int) error {
+	database, err := requireDatabase(r.database)
 	if err != nil {
 		return err
 	}
