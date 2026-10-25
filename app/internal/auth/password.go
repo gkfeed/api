@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -11,8 +12,8 @@ import (
 
 var getUser = db.GetUserFromDB
 
-func authenticateWithDB(username, password string) (models.User, bool, error) {
-	user, err := getUser(username)
+func authenticateWithDB(ctx context.Context, username, password string) (models.User, bool, error) {
+	user, err := getUser(ctx, username)
 	if errors.Is(err, sql.ErrNoRows) {
 		return models.User{}, false, nil
 	}
@@ -24,6 +25,6 @@ func authenticateWithDB(username, password string) (models.User, bool, error) {
 	return user, authenticated, nil
 }
 
-func AuthenticatePassword(username, password string) (models.User, bool, error) {
-	return authenticateWithDB(username, password)
+func AuthenticatePassword(ctx context.Context, username, password string) (models.User, bool, error) {
+	return authenticateWithDB(ctx, username, password)
 }

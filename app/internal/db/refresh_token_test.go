@@ -22,11 +22,11 @@ func TestRotateAuthRefreshTokenDetectsReuseAndRevokesFamily(t *testing.T) {
 	}
 	familyID := []byte("test-family")
 	now := time.Now()
-	if err := CreateAuthRefreshToken(1, testDigestToken(oldToken), familyID, now.Add(time.Hour)); err != nil {
+	if err := CreateAuthRefreshToken(t.Context(), 1, testDigestToken(oldToken), familyID, now.Add(time.Hour)); err != nil {
 		t.Fatalf("CreateAuthRefreshToken() returned error: %v", err)
 	}
 
-	rotation, err := RotateAuthRefreshToken(
+	rotation, err := RotateAuthRefreshToken(t.Context(),
 		testDigestToken(oldToken),
 		testDigestToken(newToken),
 		now, now.Add(time.Hour),
@@ -38,7 +38,7 @@ func TestRotateAuthRefreshTokenDetectsReuseAndRevokesFamily(t *testing.T) {
 		t.Fatalf("rotation = %#v, want user 1 and family %q", rotation, familyID)
 	}
 
-	_, err = RotateAuthRefreshToken(
+	_, err = RotateAuthRefreshToken(t.Context(),
 		testDigestToken(oldToken),
 		testDigestToken(oldToken),
 		now,
@@ -48,7 +48,7 @@ func TestRotateAuthRefreshTokenDetectsReuseAndRevokesFamily(t *testing.T) {
 		t.Fatalf("reusing old token returned %v, want ErrRefreshTokenReuse", err)
 	}
 
-	_, err = RotateAuthRefreshToken(
+	_, err = RotateAuthRefreshToken(t.Context(),
 		testDigestToken(newToken),
 		testDigestToken(oldToken),
 		now,
@@ -66,7 +66,7 @@ func TestRotateAuthRefreshTokenIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateOpaqueToken() returned error: %v", err)
 	}
-	if err := CreateAuthRefreshToken(
+	if err := CreateAuthRefreshToken(t.Context(),
 		1,
 		testDigestToken(oldToken),
 		[]byte("concurrent-family"),
@@ -86,7 +86,7 @@ func TestRotateAuthRefreshTokenIsAtomic(t *testing.T) {
 				results <- generateErr
 				return
 			}
-			_, rotateErr := RotateAuthRefreshToken(
+			_, rotateErr := RotateAuthRefreshToken(t.Context(),
 				testDigestToken(oldToken),
 				testDigestToken(newToken),
 				time.Now(),

@@ -19,7 +19,7 @@ func Authenticate(sessions *SessionStore) func(http.HandlerFunc) http.HandlerFun
 
 			username, password, ok := r.BasicAuth()
 			if ok {
-				user, authenticated, err := authenticateWithDB(username, password)
+				user, authenticated, err := authenticateWithDB(r.Context(), username, password)
 				if err != nil {
 					log.Printf("auth: basic auth error for user=%q: %v", username, err)
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

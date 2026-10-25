@@ -31,7 +31,7 @@ func (h *AuthHandler) CreateBrowserSession(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Username and password are required", http.StatusBadRequest)
 		return
 	}
-	user, ok, err := auth.AuthenticatePassword(req.Username, req.Password)
+	user, ok, err := auth.AuthenticatePassword(r.Context(), req.Username, req.Password)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return
@@ -123,7 +123,7 @@ func (h *AuthHandler) FinishBrowserLogin(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid credential assertion response", http.StatusBadRequest)
 		return
 	}
-	_, user, err := h.webAuthnService.FinishLogin(parsed)
+	_, user, err := h.webAuthnService.FinishLogin(r.Context(), parsed)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return

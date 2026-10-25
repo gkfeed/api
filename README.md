@@ -237,6 +237,15 @@ for response details, the PostgreSQL prerequisite, and deferred frontend/dev-pro
 
 Refresh token IDs in the infra-owned `refresh_tokens` table contain only SHA-256 token digests and random family IDs. Consumed tokens remain as expired rows so reuse can be detected. Each refresh rotates the token; reusing an old token revokes the entire token family and its access sessions. Access sessions are held in memory, so restarting the API invalidates access tokens while valid refresh tokens can obtain new ones.
 
+Password and passkey persistence use the HTTP request context. Token login,
+refresh and logout also honor cancellation and deadlines while waiting for
+the shared lifecycle lock, a database connection or the refresh transaction's
+PostgreSQL advisory lock. Cancellation before commit rolls back the transaction.
+After a successful commit, access-session publication or revocation completes
+under the lifecycle lock even if the request has since been canceled. This keeps
+concurrent refresh and logout ordered. Existing v1/v2 response formats and
+database grants are unchanged; refresh tokens still require no `UPDATE` grant.
+
 The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing
 clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive
@@ -292,6 +301,7 @@ This opt-in suite truncates users and dependent application data. Never point
 it at a shared or production database. The operator connection seeds fixtures;
 repository and auth operations use `SET ROLE gkfeed_api` through pgx connection
 parameters. Tests cover concurrent feed creation across multiple connections,
-nullable passwords, WebAuthn lookups, refresh tokens, and application grants.
+nullable passwords, WebAuthn lookups, refresh tokens, cancellation of HTTP
+refresh blocked on an advisory lock, and application grants.
 Without this variable, `make check` runs local fixtures and skips PostgreSQL
 integration tests.
