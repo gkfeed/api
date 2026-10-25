@@ -45,6 +45,34 @@ make check
 `make lint` runs `go vet` and the same `gopls` diagnostics used by Go editor
 integrations. Install `gopls` first with `make install-lint`.
 
+### Swagger 2.0 workflow
+
+Edit the Swaggo annotations in Go handlers and their DTOs. Generated
+`app/cmd/api/docs/{docs.go,swagger.json,swagger.yaml}` are ignored by Git.
+Do not edit or commit them. `app/generate-swagger.sh` pins the generator version.
+
+`make dev`, `make build`, `make test`, `make vet`, `make lint`, `make format`
+and `make check` generate fresh docs first. On a clean checkout, prepare them
+before using direct Go commands or opening the project in a Go editor:
+
+```sh
+make swagger
+cd app && go test ./...
+```
+
+`make swagger-check` generates and validates Swagger 2.0. `make check` also
+runs the existing Swagger/HTTP tests and vet. The first run downloads the
+pinned tools. `make build` writes `.cache/bin/gkfeed-api`.
+
+CI runs on PRs targeting `v1` and pushes to `v1`, and publishes JSON/YAML
+in a `swagger-<tested commit SHA>` Actions artifact. Consumers of the former
+raw GitHub paths should use that artifact or `/api/swagger/doc.json`.
+Swagger UI remains at `/api/swagger/index.html`.
+
+Docker generates Swagger in its build stage and embeds it in the binary.
+Keep HTTP tests for contract changes; text-only documentation edits do not
+need a new endpoint-specific Swagger test.
+
 ## Configuration
 
 Configuration is read from environment variables at startup:
