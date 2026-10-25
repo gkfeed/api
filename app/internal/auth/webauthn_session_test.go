@@ -14,7 +14,9 @@ func TestPendingCeremonyIsPoppedWithRegistrationName(t *testing.T) {
 		Expires:   time.Now().Add(time.Minute),
 	}
 
-	store.store(session, "work laptop")
+	if err := store.store(session, "work laptop"); err != nil {
+		t.Fatal(err)
+	}
 	pendingCeremony, ok := store.pop(session.Challenge)
 
 	if !ok {
@@ -38,7 +40,9 @@ func TestPendingCeremonyExpiresAtSessionDeadline(t *testing.T) {
 		Expires:   time.Now().Add(-time.Second),
 	}
 
-	store.store(session, "unused name")
+	if err := store.store(session, "unused name"); err == nil {
+		t.Fatal("store() accepted an expired ceremony")
+	}
 	if _, ok := store.pop(session.Challenge); ok {
 		t.Fatal("pop() returned an expired ceremony")
 	}
@@ -48,7 +52,8 @@ func TestPendingCeremonyExpiresAtSessionDeadline(t *testing.T) {
 }
 
 func TestStoringCeremonyRemovesExpiredEntriesOnly(t *testing.T) {
-	store := &ceremonyStore{pendingCeremonies: map[string]pendingCeremony{
+	store := newCeremonyStore()
+	store.pendingCeremonies = map[string]pendingCeremony{
 		"expired": {
 			session: &webauthn.SessionData{
 				Challenge: "expired",
@@ -61,20 +66,36 @@ func TestStoringCeremonyRemovesExpiredEntriesOnly(t *testing.T) {
 				Expires:   time.Now().Add(time.Minute),
 			},
 		},
-	}}
+		"no-deadline": {session: &webauthn.SessionData{Challenge: "no-deadline"}},
+	}
 
-	store.store(&webauthn.SessionData{
+	if err := store.store(&webauthn.SessionData{
 		Challenge: "new",
 		Expires:   time.Now().Add(time.Minute),
-	}, "")
+	}, ""); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, ok := store.pendingCeremonies["expired"]; ok {
 		t.Fatal("expired ceremony was not removed")
+	}
+	if _, ok := store.pendingCeremonies["no-deadline"]; ok {
+		t.Fatal("ceremony without a deadline was not removed")
 	}
 	if _, ok := store.pendingCeremonies["active"]; !ok {
 		t.Fatal("active ceremony was removed")
 	}
 	if _, ok := store.pendingCeremonies["new"]; !ok {
 		t.Fatal("new ceremony was not stored")
+	}
+}
+
+func TestCeremonyStoreRejectsMissingDeadline(t *testing.T) {
+	store := newCeremonyStore()
+	if err := store.store(&webauthn.SessionData{Challenge: "no-deadline"}, ""); err == nil {
+		t.Fatal("store() accepted a ceremony without a deadline")
+	}
+	if len(store.pendingCeremonies) != 0 {
+		t.Fatal("store() retained a ceremony without a deadline")
 	}
 }

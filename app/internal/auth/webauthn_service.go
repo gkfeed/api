@@ -25,6 +25,10 @@ func NewWebAuthnService(cfg config.Config) (*WebAuthnService, error) {
 		RPDisplayName: cfg.WebAuthnRPDisplay,
 		RPID:          cfg.WebAuthnRPID,
 		RPOrigins:     []string{cfg.WebAuthnRPOrigin},
+		Timeouts: webauthn.TimeoutsConfig{
+			Login:        webauthn.TimeoutConfig{Enforce: true},
+			Registration: webauthn.TimeoutConfig{Enforce: true},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create webauthn: %w", err)
@@ -56,7 +60,9 @@ func (s *WebAuthnService) BeginRegistration(user models.User, credentialName str
 		return nil, fmt.Errorf("begin registration: %w", err)
 	}
 
-	s.ceremonies.store(sessionData, credentialName)
+	if err := s.ceremonies.store(sessionData, credentialName); err != nil {
+		return nil, fmt.Errorf("store registration ceremony: %w", err)
+	}
 	return creation, nil
 }
 
@@ -87,7 +93,9 @@ func (s *WebAuthnService) BeginLogin() (*protocol.CredentialAssertion, error) {
 	if err != nil {
 		return nil, fmt.Errorf("begin discoverable login: %w", err)
 	}
-	s.ceremonies.store(sessionData, "")
+	if err := s.ceremonies.store(sessionData, ""); err != nil {
+		return nil, fmt.Errorf("store login ceremony: %w", err)
+	}
 	return assertion, nil
 }
 
