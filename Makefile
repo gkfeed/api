@@ -1,4 +1,4 @@
-.PHONY: check dev format install-lint lint merge-to-master test update vet
+.PHONY: build check dev format install-lint lint merge-to-master swagger swagger-check test update vet
 
 APP_DIR := app
 GO_BIN := $(shell go env GOBIN)
@@ -13,13 +13,23 @@ update:
 	docker compose build
 	docker compose up -d
 
-test:
+swagger:
+	cd $(APP_DIR) && ./generate-swagger.sh
+
+swagger-check: swagger
+	cd $(APP_DIR) && go run github.com/go-swagger/go-swagger/cmd/swagger@v0.36.0 validate cmd/api/docs/swagger.json
+
+build: swagger
+	mkdir -p .cache/bin
+	cd $(APP_DIR) && go build -trimpath -buildvcs=false -o ../.cache/bin/gkfeed-api ./cmd/api
+
+test: swagger
 	cd $(APP_DIR) && go test ./...
 
-vet:
+vet: swagger
 	cd $(APP_DIR) && go vet ./...
 
-check: test vet
+check: test vet swagger-check
 
 lint: vet
 	@test -x "$(GOPLS)" || { \
@@ -33,13 +43,13 @@ lint: vet
 		test $$status -eq 0 && test -z "$$diagnostics"; \
 	}
 
-format:
+format: swagger
 	cd $(APP_DIR) && go fmt ./...
 
 install-lint:
 	go install golang.org/x/tools/gopls@latest
 
-dev:
+dev: swagger
 	cd $(APP_DIR) && go run ./cmd/api
 
 merge-to-master:

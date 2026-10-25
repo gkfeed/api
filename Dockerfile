@@ -7,7 +7,8 @@ RUN go mod download
 
 COPY app/ .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/gkfeed-api ./cmd/api
+RUN ./generate-swagger.sh \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -o /out/gkfeed-api ./cmd/api
 
 
 FROM alpine:latest
