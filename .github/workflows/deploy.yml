@@ -3,6 +3,11 @@ on:
   push:
     branches:
       - master
+      - v1
+  pull_request:
+    branches:
+      - master
+      - v1
   workflow_dispatch:
     inputs:
       cutover_ready:
@@ -10,6 +15,8 @@ on:
         required: true
         type: boolean
         default: false
+permissions:
+  contents: read
 jobs:
   test:
     name: Test and vet
@@ -23,11 +30,62 @@ jobs:
           go-version-file: app/go.mod
           cache-dependency-path: app/go.sum
       - name: Run tests and vet
-        run: make check
+        run: env -u GKFEED_TEST_DATABASE_URL make check
+
+  postgres:
+    name: PostgreSQL 17 contracts
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: api_contract
+          # Disposable job-local service only. No deployment credentials.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres -d api_contract"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
+      # Infra owns all DDL/grants. This merged revision includes prerequisite
+      # 20261012101552_add_browser_sessions, plus item change triggers.
+      - name: Check out pinned infra migrations
+        uses: actions/checkout@v4
+        with:
+          repository: gkfeed/infra
+          ref: 76b69007f77e2cea64113b90bd74219128958209
+          path: .ci/infra
+          persist-credentials: false
+      - name: Apply infra migrations with pinned dbmate 2.35.1
+        working-directory: .ci/infra
+        env:
+          DATABASE_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/api_contract?sslmode=disable
+        run: |
+          # Keep the pinned checkout read-only, including db/schema.sql.
+          make migrate status DBMATE='docker run --rm --network=host \
+            --user "$$(id -u):$$(id -g)" \
+            -v "$(CURDIR):/work:ro" -w /work \
+            -e DATABASE_URL -e DBMATE_STRICT=true \
+            $(DBMATE_IMAGE) --no-dump-schema'
+      - name: Run PostgreSQL contracts as gkfeed_api
+        working-directory: app
+        env:
+          GKFEED_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/api_contract?sslmode=disable
+        run: go test ./internal/storage/postgres -run '^TestPostgres' -count=1 -timeout 120s
 
   deploy:
     if: github.event_name == 'workflow_dispatch' && inputs.cutover_ready
-    needs: test
+    needs: [test, postgres]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy with SSH

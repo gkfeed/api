@@ -95,8 +95,10 @@ docker compose up --build -d
 
 Docker Compose requires `GKFEED_DATABASE_URL` for an externally provisioned
 PostgreSQL database. It does not start a database or run migrations.
-The deployment workflow runs tests on pushes to `master`, but deployment
-requires a manual run with `cutover_ready` confirmed. Confirm that the infra
+The workflow runs tests and vet on pull requests and pushes to `v1` and
+`master`. A separate job runs PostgreSQL 17 contracts against a disposable
+service. Deployment requires a manual run with `cutover_ready` confirmed and
+both check jobs passing. Confirm that the infra
 schema, grants, importer, sequence synchronization, and cutover checks are
 complete before selecting that input.
 
@@ -327,3 +329,27 @@ leaks, concurrent feed creation across multiple connections,
 nullable passwords, WebAuthn lookups, refresh tokens, and application grants.
 Without this variable, `make check` runs local fixtures and skips PostgreSQL
 integration tests.
+
+CI checks out merged infra revision
+[`76b69007f77e2cea64113b90bd74219128958209`](https://github.com/gkfeed/infra/commit/76b69007f77e2cea64113b90bd74219128958209).
+It includes prerequisite `20261012101552_add_browser_sessions` and the item
+change triggers. Infra's `Makefile` pins dbmate to `2.35.1`; CI uses its
+`make migrate status` targets with a read-only mount and schema dumping
+disabled. This provisions only the job's disposable database. The API and
+deployment do not execute DDL. The service uses a randomly assigned host port
+and needs no repository secrets.
+
+PostgreSQL sync tests cover a consistent initial sequence/item snapshot during
+a concurrent commit, the page ceiling across later inserts and deletes,
+upsert payloads, change pagination, empty polls, feed deletion and direct FK
+cascades, and user isolation. The commit-order test observes PostgreSQL lock
+dependencies before advancing a cursor, so a later commit cannot hide a
+lower-sequence change. Repository reads and deletions use `gkfeed_api`; operator
+connections seed writes that the importer/parser would normally perform.
+Run only these PostgreSQL contracts with:
+
+```sh
+cd app
+GKFEED_TEST_DATABASE_URL='<disposable operator connection URL>' \
+  go test ./internal/storage/postgres -run '^TestPostgres' -count=1 -timeout 120s
+```

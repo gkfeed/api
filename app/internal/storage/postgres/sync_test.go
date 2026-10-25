@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestSyncPaginationAndChanges(t *testing.T) {
+func TestSyncPaginationAndChangesWithSQLiteFixtures(t *testing.T) {
 	db := newTestDB(t)
 	feeds := NewFeedRepository(db)
 	items := NewItemRepository(db)
