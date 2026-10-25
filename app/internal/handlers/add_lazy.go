@@ -13,13 +13,15 @@ type feedMutationResponse struct {
 // @Description  Creates a feed by parsing the URL and detecting the source type (YouTube, TikTok, Rezka, etc.).
 // @Tags         feeds
 // @Accept       json
-// @Produce      json
+// @Produce      json,plain
 // @Param        feed  body      object{url=string}  true  "URL to create feed from"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200   {object}  feedMutationResponse
 // @Failure      400
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      500
 // @Router       /api/v1/add_lazy [post]
 func (h *LibraryHandler) HandleAddFeedByURL(w http.ResponseWriter, r *http.Request) {

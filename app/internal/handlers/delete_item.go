@@ -8,9 +8,11 @@ import "net/http"
 // @Param        id path int true "Item ID"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      204
 // @Failure      400
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/items/{id} [delete]

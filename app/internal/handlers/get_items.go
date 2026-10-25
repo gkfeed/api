@@ -20,6 +20,7 @@ type getItemsResponse struct {
 // @Param        cursor  query     int  false  "Pagination cursor (item ID)"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200     {object}  getItemsResponse
 // @Failure      400
 // @Failure      401

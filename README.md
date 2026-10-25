@@ -81,11 +81,19 @@ Configuration is read from environment variables at startup:
 | --- | --- | --- |
 | `GKFEED_ADDRESS` | `:8086` | HTTP server listen address |
 | `GKFEED_DATABASE_URL` | none (required) | PostgreSQL application connection URL |
-| `GKFEED_ALLOWED_ORIGINS` | Localhost development origins | Comma-separated exact origins for CORS and browser-session mutation checks |
-| `GKFEED_SYNC_CURSOR_SECRET` | Random process-local key | Sync cursor key; accepts `GKFEED_JWT_SECRET` as fallback |
+| `GKFEED_ALLOWED_ORIGINS` | `http://localhost,http://localhost:4200,http://localhost:8086` | Comma-separated origins for CORS and exact browser-session Origin checks. Use full origins without trailing slashes. |
+| `GKFEED_SYNC_CURSOR_SECRET` | Random process-local key | Sync cursor key of at least 32 bytes; takes precedence over `GKFEED_JWT_SECRET` |
+| `GKFEED_JWT_SECRET` | none | Compatibility fallback for the sync cursor key only; at least 32 bytes when used |
 | `GKFEED_ACCESS_TTL` | `30m` | Access-token lifetime |
 | `GKFEED_JWT_REFRESH_TTL` | `2160h` | Refresh-token idle lifetime |
+| `GKFEED_WEBAUTHN_RP_ID` | none | WebAuthn relying-party ID, such as `feed.example`, without scheme or port |
+| `GKFEED_WEBAUTHN_RP_ORIGIN` | none | Single WebAuthn browser origin, such as `https://feed.example`; configure it in `GKFEED_ALLOWED_ORIGINS` too for browser login |
+| `GKFEED_WEBAUTHN_RP_DISPLAY` | `GKFeed` | Relying-party display name shown during passkey registration |
 | `OPENROUTER_API_KEY` | none | Enables Jev feed type detection for URL-only v2 creation. Explicit `type` or `types` works without it. |
+
+WebAuthn requires both RP ID and RP origin to initialize successfully. Otherwise,
+v2 passkey login returns `503` after the Origin check, and v1 passkey routes
+are not registered. Password login remains available.
 
 ## Docker
 
@@ -107,6 +115,9 @@ Swagger UI is available at `/api/swagger/index.html`.
 The resource routes are available under `/api/v2`. Browser sessions, Basic and
 Bearer credentials are accepted for every route below. Feed creation accepts one `url` with
 optional `title` and either `type` or `types`. Deleting a feed also deletes its items.
+
+See the [browser session contract](docs/browser-sessions.md#origin-cors-and-v1-compatibility)
+for credential precedence, Origin checks and cookie restrictions.
 
 | Method | Route | Purpose |
 | --- | --- | --- |

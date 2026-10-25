@@ -14,6 +14,7 @@ import (
 // @Produce      application/rss+xml
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200
 // @Failure      401
 // @Failure      500
