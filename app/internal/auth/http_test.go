@@ -232,18 +232,3 @@ func TestBasicAuthRejectsNullPassword(t *testing.T) {
 		}
 	}
 }
-
-func TestPasswordAuthenticatorPassesContextToInjectedRepository(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	passwords := NewPasswordAuthenticator(userLookupFunc(func(received context.Context, name string) (models.User, error) {
-		if received != ctx || name != "reader" {
-			t.Fatalf("lookup received context %v, user %q", received, name)
-		}
-		return models.User{}, received.Err()
-	}))
-	if _, ok, err := passwords.AuthenticatePassword(ctx, "reader", "secret"); ok || !errors.Is(err, context.Canceled) {
-		t.Fatalf("authentication = %v, %v; want cancellation", ok, err)
-	}
-}

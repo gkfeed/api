@@ -14,6 +14,13 @@ import (
 	"gkfeed/api/internal/models"
 )
 
+type BrowserSessionRepository interface {
+	CreateBrowserSession(context.Context, []byte, int, time.Time, time.Time) error
+	TouchBrowserSession(context.Context, []byte, time.Time, time.Duration) (models.User, time.Time, error)
+	DeleteBrowserSession(context.Context, []byte) error
+	DeleteUserBrowserSessions(context.Context, int) error
+}
+
 const (
 	BrowserSessionCookie  = "gkfeed.session"
 	BrowserSessionIdleTTL = 30 * 24 * time.Hour

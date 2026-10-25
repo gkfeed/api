@@ -21,13 +21,6 @@ type CredentialRepository interface {
 	DeleteWebAuthnCredential(context.Context, []byte, int) (bool, error)
 }
 
-type AuthRepositories struct {
-	Users           auth.PasswordUserRepository
-	Credentials     CredentialRepository
-	RefreshTokens   RefreshTokenRepository
-	BrowserSessions auth.BrowserSessionRepository
-}
-
 type AuthHandler struct {
 	cfg             config.Config
 	webAuthnService *auth.WebAuthnService
@@ -38,14 +31,18 @@ type AuthHandler struct {
 	credentials     CredentialRepository
 }
 
-func NewAuthHandler(cfg config.Config, webAuthnService *auth.WebAuthnService, sessions *auth.SessionStore, repositories AuthRepositories) *AuthHandler {
-	if sessions == nil {
-		sessions = auth.NewSessionStore(cfg.EffectiveAccessTokenTTL())
-	}
+func NewAuthHandler(
+	cfg config.Config,
+	webAuthnService *auth.WebAuthnService,
+	sessions *auth.SessionStore,
+	passwords *auth.PasswordAuthenticator,
+	browserSessions *auth.BrowserSessionStore,
+	refreshTokens RefreshTokenRepository,
+	credentials CredentialRepository,
+) *AuthHandler {
 	return &AuthHandler{
 		cfg: cfg, webAuthnService: webAuthnService, sessions: sessions,
-		browserSessions: auth.NewBrowserSessionStore(cfg.AllowedOrigins, repositories.BrowserSessions),
-		passwords:       auth.NewPasswordAuthenticator(repositories.Users),
-		refreshTokens:   repositories.RefreshTokens, credentials: repositories.Credentials,
+		passwords: passwords, browserSessions: browserSessions,
+		refreshTokens: refreshTokens, credentials: credentials,
 	}
 }

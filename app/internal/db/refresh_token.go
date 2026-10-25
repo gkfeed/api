@@ -12,6 +12,13 @@ import (
 	"gkfeed/api/internal/models"
 )
 
+// RefreshTokenRepository borrows the pool owned by the composition root.
+type RefreshTokenRepository struct{ database *sql.DB }
+
+func NewRefreshTokenRepository(database *sql.DB) *RefreshTokenRepository {
+	return &RefreshTokenRepository{database: database}
+}
+
 var ErrInvalidRefreshToken = errors.New("invalid refresh token")
 var ErrRefreshTokenReuse = errors.New("refresh token reuse detected")
 
@@ -148,15 +155,11 @@ func (r *RefreshTokenRepository) RevokeUserAuthRefreshTokens(ctx context.Context
 // revocation, logout, and rotation ordered even though the application role
 // has no UPDATE permission on the infra-owned refresh_tokens table.
 func (r *RefreshTokenRepository) beginRefreshTransaction(ctx context.Context) (*sql.Tx, error) {
-	database, err := requireDatabase(r.database)
-	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
-	}
-	tx, err := database.BeginTx(ctx, nil)
+	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin refresh-token transaction: %w", err)
 	}
-	if !strings.Contains(fmt.Sprintf("%T", database.Driver()), "sqlite3") {
+	if !strings.Contains(fmt.Sprintf("%T", r.database.Driver()), "sqlite3") {
 		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(281474976710655)"); err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("lock refresh-token transaction: %w", err)

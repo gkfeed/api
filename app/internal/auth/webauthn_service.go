@@ -12,6 +12,17 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
+type WebAuthnUserRepository interface {
+	GetUserFromDBByID(context.Context, int) (models.User, error)
+}
+
+type WebAuthnCredentialRepository interface {
+	GetWebAuthnCredentialsByUserID(context.Context, int) ([]webauthn.Credential, error)
+	GetWebAuthnUserIDByCredentialID(context.Context, []byte) (int, error)
+	AddWebAuthnCredential(context.Context, int, webauthn.Credential, string) error
+	UpdateWebAuthnCredential(context.Context, webauthn.Credential) error
+}
+
 type WebAuthnService struct {
 	webAuthn    *webauthn.WebAuthn
 	ceremonies  *ceremonyStore

@@ -10,14 +10,17 @@ import (
 	"gkfeed/api/internal/models"
 )
 
+// BrowserSessionRepository borrows the pool owned by the composition root.
+type BrowserSessionRepository struct{ database *sql.DB }
+
+func NewBrowserSessionRepository(database *sql.DB) *BrowserSessionRepository {
+	return &BrowserSessionRepository{database: database}
+}
+
 var ErrInvalidBrowserSession = errors.New("invalid browser session")
 
 func (r *BrowserSessionRepository) CreateBrowserSession(ctx context.Context, hash []byte, userID int, now, expiresAt time.Time) error {
-	database, err := requireDatabase(r.database)
-	if err != nil {
-		return err
-	}
-	_, err = database.ExecContext(ctx, `INSERT INTO browser_sessions
+	_, err := r.database.ExecContext(ctx, `INSERT INTO browser_sessions
  (token_hash, user_id, created_at, last_seen_at, expires_at) VALUES ($1, $2, $3, $3, $4)`, hash, userID, now, expiresAt)
 	return err
 }
@@ -25,11 +28,7 @@ func (r *BrowserSessionRepository) CreateBrowserSession(ctx context.Context, has
 // TouchBrowserSession checks expiry and advances activity in the same statement.
 // A concurrent delete cannot be undone by a late authentication request.
 func (r *BrowserSessionRepository) TouchBrowserSession(ctx context.Context, hash []byte, now time.Time, idleTTL time.Duration) (models.User, time.Time, error) {
-	database, err := requireDatabase(r.database)
-	if err != nil {
-		return models.User{}, time.Time{}, err
-	}
-	tx, err := database.BeginTx(ctx, nil)
+	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return models.User{}, time.Time{}, err
 	}
@@ -56,22 +55,14 @@ func (r *BrowserSessionRepository) TouchBrowserSession(ctx context.Context, hash
 }
 
 func (r *BrowserSessionRepository) DeleteBrowserSession(ctx context.Context, hash []byte) error {
-	database, err := requireDatabase(r.database)
-	if err != nil {
-		return err
-	}
-	_, err = database.ExecContext(ctx, "DELETE FROM browser_sessions WHERE token_hash = $1", hash)
+	_, err := r.database.ExecContext(ctx, "DELETE FROM browser_sessions WHERE token_hash = $1", hash)
 	return err
 }
 
 // Infra owns DDL. Fail before serving requests if its browser-session contract
 // has not been installed or the API role cannot read the required columns.
 func (r *BrowserSessionRepository) CheckBrowserSessionSchema(ctx context.Context) error {
-	database, err := requireDatabase(r.database)
-	if err != nil {
-		return err
-	}
-	rows, err := database.QueryContext(ctx, `SELECT token_hash, user_id, created_at, last_seen_at, expires_at
+	rows, err := r.database.QueryContext(ctx, `SELECT token_hash, user_id, created_at, last_seen_at, expires_at
  FROM browser_sessions LIMIT 0`)
 	if err != nil {
 		return fmt.Errorf("browser_sessions schema is required; apply the infra browser-session migration: %w", err)
@@ -80,10 +71,6 @@ func (r *BrowserSessionRepository) CheckBrowserSessionSchema(ctx context.Context
 }
 
 func (r *BrowserSessionRepository) DeleteUserBrowserSessions(ctx context.Context, userID int) error {
-	database, err := requireDatabase(r.database)
-	if err != nil {
-		return err
-	}
-	_, err = database.ExecContext(ctx, "DELETE FROM browser_sessions WHERE user_id = $1", userID)
+	_, err := r.database.ExecContext(ctx, "DELETE FROM browser_sessions WHERE user_id = $1", userID)
 	return err
 }

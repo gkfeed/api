@@ -31,10 +31,7 @@ func TestPostgresRefreshCancellation(t *testing.T) {
 			}
 			sessions := auth.NewSessionStore(time.Hour)
 			sessions.Add("original-access", models.User{ID: 1, Name: "owner"}, family)
-			h := handlers.NewAuthHandler(config.Config{}, nil, sessions, handlers.AuthRepositories{
-				Users: db.NewUserRepository(app), Credentials: db.NewCredentialRepository(app),
-				RefreshTokens: db.NewRefreshTokenRepository(app), BrowserSessions: db.NewBrowserSessionRepository(app),
-			})
+			h := handlers.NewAuthHandler(config.Config{}, nil, sessions, nil, nil, db.NewRefreshTokenRepository(app), nil)
 
 			blocker, err := admin.BeginTx(t.Context(), nil)
 			if err != nil {

@@ -14,24 +14,7 @@ No removal date is assigned yet.
 
 ## Auth repository injection
 
-Implemented. `cmd/api` constructs separate user, WebAuthn credential,
-refresh-token and browser-session repositories from its owned SQL pool.
-Password authentication, WebAuthn and HTTP handlers receive the narrow
-interfaces they use through constructors. `internal/db` has no package-level
-pool configuration; tests inject their own repositories or local lookup fakes.
-
-Password and passkey handlers in one router share the same `SessionStore` and
-its lifecycle lock. Refresh mutations retain the PostgreSQL transaction advisory
-lock and use INSERT/DELETE without requiring UPDATE privileges. The lifecycle lock remains held through
-commit and access-session publication or revocation, including cancellation
-after a successful commit. Browser-session activity and revocation retain their
-existing transaction boundaries. The composition root closes the pool after
-HTTP shutdown; repositories never close it.
-
-The v1/v2 HTTP contracts, token formats, expiry rules and infra-owned schema
-remain unchanged. Regression tests run two live handlers with separate databases
-and overlapping user IDs, and verify isolation of password/Basic authentication,
-credentials, refresh tokens and browser sessions. The passkey login test also
-keeps a second application alive while completing the first application's
-ceremony. Local auth and SQL tests can run in parallel without swapping a global
-pool or function.
+Implemented. Auth consumers receive user, credential, refresh-token and browser-session
+repositories through constructors. Each application owns its SQL pool and access-session
+lifecycle lock; tests use separate pools or local lookup fakes. `internal/db.Configure`
+is removed. See [README](../README.md) for request cancellation and token guarantees.
