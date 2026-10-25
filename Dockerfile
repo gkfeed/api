@@ -6,8 +6,10 @@ COPY app/go.mod app/go.sum ./
 RUN go mod download
 
 COPY app/ .
+COPY scripts/swagger.sh /scripts/swagger.sh
 
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/gkfeed-api ./cmd/api
+RUN /scripts/swagger.sh generate /app /app/cmd/api/docs \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -o /out/gkfeed-api ./cmd/api
 
 
 FROM alpine:latest
