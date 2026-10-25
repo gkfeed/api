@@ -167,12 +167,14 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Logout all sessions
-// @Description  Revokes every refresh token and access session for the authenticated user.
+// @Description  Revokes every refresh token, access session and browser session for the authenticated user.
 // @Tags         auth
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      204
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      500
 // @Router       /api/v1/auth/logout-all [post]
 func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {

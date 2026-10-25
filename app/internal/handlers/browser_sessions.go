@@ -12,9 +12,11 @@ import (
 )
 
 // @Summary Create browser session with a password
+// @Description Returns the user and sets gkfeed.session.
 // @Tags browser sessions
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
 // @Accept json
-// @Produce json
+// @Produce json,plain
 // @Param body body loginRequest true "Credentials"
 // @Success 201 {object} models.User
 // @Failure 400
@@ -56,6 +58,7 @@ func (h *AuthHandler) issueBrowserSession(w http.ResponseWriter, r *http.Request
 }
 
 // @Summary Current browser user
+// @Description Uses only gkfeed.session and renews the cookie; Basic/Bearer credentials are ignored.
 // @Tags browser sessions
 // @Produce json
 // @Security BrowserSession
@@ -68,7 +71,9 @@ func (h *AuthHandler) BrowserMe(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Revoke current browser session
+// @Description Revokes and clears gkfeed.session. Cookie is optional; repeated or anonymous logout returns 204.
 // @Tags browser sessions
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
 // @Success 204
 // @Failure 403
 // @Failure 500
@@ -87,7 +92,8 @@ func (h *AuthHandler) DeleteBrowserSession(w http.ResponseWriter, r *http.Reques
 
 // @Summary Begin browser passkey login
 // @Tags browser sessions
-// @Produce json
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
+// @Produce json,plain
 // @Success 200
 // @Failure 403
 // @Failure 503
@@ -101,9 +107,11 @@ func (h *AuthHandler) BeginBrowserLogin(w http.ResponseWriter, r *http.Request) 
 }
 
 // @Summary Finish browser passkey login
+// @Description Returns the user and sets gkfeed.session.
 // @Tags browser sessions
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
 // @Accept json
-// @Produce json
+// @Produce json,plain
 // @Param body body object true "WebAuthn assertion response"
 // @Success 201 {object} models.User
 // @Failure 400

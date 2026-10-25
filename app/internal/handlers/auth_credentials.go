@@ -16,6 +16,7 @@ import (
 // @Produce      json
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200  {array}   object{id=string,name=string,created_at=string,last_used_at=string}
 // @Failure      401
 // @Failure      500
@@ -58,9 +59,11 @@ func (h *AuthHandler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 // @Param        id   path      string  true  "Credential ID (base64url)"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      204
 // @Failure      400
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/auth/credentials/{id} [delete]

@@ -33,7 +33,7 @@ var testPasskeyHTML string
 
 // @title           GKFeed API
 // @version         2.0
-// @description     RSS feed aggregator with passkey authentication.
+// @description     Feed API with Basic, Bearer and cookie authentication. A nonempty Authorization header takes precedence over the cookie. Cookie mutations require an allowed Origin; v2 login/logout always require it. GET /api/v2/me accepts only the cookie.
 
 // @contact.name   GKFeed
 // @contact.url    https://github.com/gkfeed/api-go
@@ -43,10 +43,12 @@ var testPasskeyHTML string
 // @securityDefinitions.apikey BearerAuth
 // @in                         header
 // @name                       Authorization
+// @description                Send Authorization: Bearer <access-token>.
 
 // @securityDefinitions.apikey BrowserSession
 // @in                         header
 // @name                       Cookie
+// @description                Browser-managed gkfeed.session=<session-id> cookie. HttpOnly, Secure, SameSite=Lax, Path=/, no Domain. Swagger 2.0 represents it as a header; browsers cannot set Cookie manually in Swagger UI.
 
 func main() {
 	if err := run(); err != nil {
