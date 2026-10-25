@@ -22,20 +22,18 @@ type pendingCeremony struct {
 type ceremonyStore struct {
 	pendingCeremonies map[string]pendingCeremony
 	mu                sync.Mutex
-	now               func() time.Time
 }
 
 func newCeremonyStore() *ceremonyStore {
 	return &ceremonyStore{
 		pendingCeremonies: make(map[string]pendingCeremony),
-		now:               time.Now,
 	}
 }
 
 func (s *ceremonyStore) store(session *webauthn.SessionData, registrationName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.now()
+	now := time.Now()
 	s.removeExpired(now)
 	if session.Expires.IsZero() || !session.Expires.After(now) {
 		return errors.New("WebAuthn ceremony expiry must be in the future")
@@ -58,7 +56,7 @@ func (s *ceremonyStore) pop(challenge string) (pendingCeremony, bool) {
 		return pendingCeremony{}, false
 	}
 	delete(s.pendingCeremonies, challenge)
-	if ceremony.session.Expires.IsZero() || !ceremony.session.Expires.After(s.now()) {
+	if ceremony.session.Expires.IsZero() || !ceremony.session.Expires.After(time.Now()) {
 		return pendingCeremony{}, false
 	}
 	return ceremony, true

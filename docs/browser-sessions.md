@@ -20,21 +20,16 @@ when WebAuthn is not configured. Reusing a completed passkey challenge returns
 
 ## Passkey ceremonies
 
-Login and registration challenges have a server-enforced deadline matching the
-timeout in the WebAuthn options. Current ceremonies allow five minutes. This
-policy applies to both v1 passkey login and v2 browser passkey login, and to v1
-passkey registration. Registration remains bound to the authenticated user who
-began it and retains the supplied credential name. A challenge can be consumed
-only once, including when credential verification fails.
+v1/v2 passkey login and v1 registration challenges expire after five minutes on
+the server, matching the WebAuthn options. Registration keeps the initiating
+user and credential name. Each challenge can be consumed once, including when
+credential verification fails.
 
-Each API process accepts at most 4096 pending ceremonies across login and
-registration. At capacity, new begin requests fail without evicting active
-challenges. Clients can retry after ceremonies finish or expire. Begin removes
-expired entries before checking capacity; finish removes and checks only its
-own challenge. Cleanup runs during requests without background timers or
-goroutines. An idle process can retain expired entries up to this fixed limit.
-Pending challenges are kept in memory, so finishing requires the same API
-process and an API restart requires a new begin request.
+Each API process holds at most 4096 pending ceremonies. At capacity, begin fails
+without evicting active challenges. Begin removes expired entries; finish
+removes and checks only its own challenge. Cleanup uses no background timers
+or goroutines; an idle process can retain expired entries within this limit.
+Finishing requires the same API process. A restart requires a new begin.
 
 ## Cookie and expiry
 
