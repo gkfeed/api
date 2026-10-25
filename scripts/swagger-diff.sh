@@ -31,4 +31,11 @@ status=0
 ./scripts/swagger.sh diff "$report_dir/base/swagger.json" "$report_dir/head/swagger.json" \
     > "$report_dir/breaking.txt" 2>&1 || status=$?
 cat "$report_dir/breaking.txt"
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+        printf '### Swagger compatibility\n\nAdvisory report. Full contracts are in the Swagger artifact.\n\n```text\n'
+        head -c 20000 "$report_dir/breaking.txt"
+        printf '\n```\n'
+    } >> "$GITHUB_STEP_SUMMARY"
+fi
 exit "$status"

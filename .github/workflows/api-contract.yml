@@ -25,31 +25,16 @@ jobs:
         with:
           go-version-file: app/go.mod
           cache-dependency-path: app/go.sum
-      - name: Generate, test, vet and validate
-        run: env -u GKFEED_TEST_DATABASE_URL make check
-      - name: Build API
-        run: env -u GKFEED_TEST_DATABASE_URL CGO_ENABLED=0 GOOS=linux make build
+      - name: Check and build
+        run: |
+          env -u GKFEED_TEST_DATABASE_URL make check
+          env -u GKFEED_TEST_DATABASE_URL CGO_ENABLED=0 GOOS=linux make build
       - name: Compare contracts with the merge base
-        id: compatibility
         if: github.event_name == 'pull_request'
         continue-on-error: true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: ./scripts/swagger-diff.sh "$(git merge-base HEAD "$BASE_SHA")"
-      - name: Publish compatibility summary
-        if: always() && steps.compatibility.outcome != 'skipped' && github.event_name == 'pull_request'
-        env:
-          COMPARISON_OUTCOME: ${{ steps.compatibility.outcome }}
-        run: |
-          {
-            printf '### Swagger compatibility\n\nComparison outcome: %s. Advisory during baseline adoption.\n\n' "$COMPARISON_OUTCOME"
-            printf 'Review the swagger artifact for both contracts and the complete report.\n\n'
-            if [ -f .cache/swagger-report/breaking.txt ]; then
-              printf '```text\n'
-              head -c 20000 .cache/swagger-report/breaking.txt
-              printf '\n```\n'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload Swagger exports and compatibility report
         if: always()
         uses: actions/upload-artifact@v4
