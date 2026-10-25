@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -81,9 +82,12 @@ func (h *AuthHandler) BeginLogin(w http.ResponseWriter, _ *http.Request) {
 // @Param        body  body      object  true  "WebAuthn assertion response"
 // @Success      200   {object}  object{access_token=string,refresh_token=string,credential_id=string}
 // @Failure      400
+// @Failure      401
 // @Failure      500
 // @Router       /api/v1/auth/login/finish [post]
 func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(r.Body)
 	if err != nil {
 		http.Error(w, "Invalid credential assertion response", http.StatusBadRequest)
@@ -92,6 +96,10 @@ func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
 
 	credential, user, err := h.webAuthnService.FinishLogin(parsedResponse)
 	if err != nil {
+		if errors.Is(err, auth.ErrInvalidWebAuthnCeremony) {
+			writeBearerUnauthorized(w)
+			return
+		}
 		writeInternalServerError(w, fmt.Errorf("finish login: %w", err))
 		return
 	}

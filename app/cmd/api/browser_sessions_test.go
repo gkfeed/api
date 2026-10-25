@@ -2,13 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
-	"github.com/go-webauthn/webauthn/webauthn"
 	"gkfeed/api/internal/auth"
 	"gkfeed/api/internal/config"
 	"gkfeed/api/internal/db"
@@ -222,53 +214,17 @@ func TestBrowserSessionInvalidAndExpired(t *testing.T) {
 
 func TestBrowserPasskeySession(t *testing.T) {
 	_, cfg := browserFixture(t)
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	publicKey, err := cbor.Marshal(map[int]any{1: 2, 3: -7, -1: 1, -2: key.X.FillBytes(make([]byte, 32)), -3: key.Y.FillBytes(make([]byte, 32))})
-	if err != nil {
-		t.Fatal(err)
-	}
-	credentialID := []byte("test-passkey")
-	if err := db.AddWebAuthnCredential(1, webauthn.Credential{ID: credentialID, PublicKey: publicKey}, "test"); err != nil {
-		t.Fatal(err)
-	}
+	p := newTestPasskey(t)
+	p.store(t)
 	handler := newHandler(cfg)
 	begin := browserRequest(handler, "POST", "/api/v2/sessions/passkey/begin", "", browserOrigin, nil)
-	if begin.Code != 200 {
-		t.Fatalf("begin = %d, %s", begin.Code, begin.Body.String())
-	}
-	var options struct {
-		PublicKey struct {
-			Challenge string `json:"challenge"`
-		} `json:"publicKey"`
-	}
-	if err := json.Unmarshal(begin.Body.Bytes(), &options); err != nil {
-		t.Fatal(err)
-	}
-	clientData, _ := json.Marshal(map[string]any{"type": "webauthn.get", "challenge": options.PublicKey.Challenge, "origin": browserOrigin})
-	rpHash := sha256.Sum256([]byte(cfg.WebAuthnRPID))
-	authenticatorData := append(rpHash[:], byte(5)) // User present and verified.
-	authenticatorData = append(authenticatorData, 0, 0, 0, 1)
-	clientHash := sha256.Sum256(clientData)
-	signed := sha256.Sum256(append(append([]byte{}, authenticatorData...), clientHash[:]...))
-	signature, err := ecdsa.SignASN1(rand.Reader, key, signed[:])
-	if err != nil {
-		t.Fatal(err)
-	}
-	userHandle := make([]byte, 8)
-	binary.BigEndian.PutUint64(userHandle, 1)
-	encode := base64.RawURLEncoding.EncodeToString
-	body, _ := json.Marshal(map[string]any{"id": encode(credentialID), "rawId": encode(credentialID), "type": "public-key", "response": map[string]string{
-		"authenticatorData": encode(authenticatorData), "clientDataJSON": encode(clientData), "signature": encode(signature), "userHandle": encode(userHandle),
-	}})
-	finish := browserRequest(handler, "POST", "/api/v2/sessions/passkey/finish", string(body), browserOrigin, nil)
+	body := p.response(t, passkeyChallenge(t, begin), browserOrigin, false)
+	finish := browserRequest(handler, "POST", "/api/v2/sessions/passkey/finish", body, browserOrigin, nil)
 	cookie := browserLoginCookie(t, finish)
 	if w := browserRequest(newHandler(cfg), "GET", "/api/v2/me", "", "", cookie); w.Code != 200 {
 		t.Fatalf("passkey cookie = %d, %s", w.Code, w.Body.String())
 	}
-	if w := browserRequest(handler, "POST", "/api/v2/sessions/passkey/finish", string(body), browserOrigin, nil); w.Code != 401 {
+	if w := browserRequest(handler, "POST", "/api/v2/sessions/passkey/finish", body, browserOrigin, nil); w.Code != 401 {
 		t.Fatalf("challenge replay = %d", w.Code)
 	}
 }
