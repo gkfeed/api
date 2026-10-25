@@ -1,7 +1,5 @@
 .git
 .cache
 .research-swagger
-app/cmd/api/docs/docs.go
-app/cmd/api/docs/swagger.json
-app/cmd/api/docs/swagger.yaml
+app/cmd/api/docs/
 **/*.sqlite

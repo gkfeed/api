@@ -17,9 +17,6 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -29,20 +26,10 @@ jobs:
         run: |
           env -u GKFEED_TEST_DATABASE_URL make check
           env -u GKFEED_TEST_DATABASE_URL CGO_ENABLED=0 GOOS=linux make build
-      - name: Compare contracts with the merge base
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: ./scripts/swagger-diff.sh "$(git merge-base HEAD "$BASE_SHA")"
-      - name: Upload Swagger exports and compatibility report
+      - name: Upload Swagger exports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: swagger-${{ github.event.pull_request.head.sha || github.sha }}
-          path: |
-            app/cmd/api/docs/swagger.json
-            app/cmd/api/docs/swagger.yaml
-            .cache/swagger-report/
-          include-hidden-files: true
+          name: swagger-${{ github.sha }}
+          path: app/cmd/api/docs/swagger.*
           if-no-files-found: error

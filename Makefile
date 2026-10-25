@@ -14,10 +14,10 @@ update:
 	docker compose up -d
 
 swagger:
-	./scripts/swagger.sh generate
+	cd $(APP_DIR) && ./generate-swagger.sh
 
 swagger-check: swagger
-	./scripts/swagger.sh validate
+	cd $(APP_DIR) && go run github.com/go-swagger/go-swagger/cmd/swagger@v0.36.0 validate cmd/api/docs/swagger.json
 
 build: swagger
 	mkdir -p .cache/bin

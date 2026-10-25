@@ -49,9 +49,7 @@ integrations. Install `gopls` first with `make install-lint`.
 
 Edit the Swaggo annotations in Go handlers and their DTOs. Generated
 `app/cmd/api/docs/{docs.go,swagger.json,swagger.yaml}` are ignored by Git.
-Do not edit or commit generated fragments. `scripts/swagger.sh` pins both the
-Swaggo generator and the Swagger 2.0 validator independently of the runtime
-dependency in `app/go.mod`.
+Do not edit or commit them. `app/generate-swagger.sh` pins the generator version.
 
 `make dev`, `make build`, `make test`, `make vet`, `make lint`, `make format`
 and `make check` generate fresh docs first. On a clean checkout, prepare them
@@ -62,43 +60,18 @@ make swagger
 cd app && go test ./...
 ```
 
-`make swagger-check` generates and validates the specification. `make check`
-also runs the existing Swagger smoke/policy tests, HTTP tests and vet.
-The first run downloads the pinned tools; subsequent runs use Go's cache.
-`make build` writes the local API binary to `.cache/bin/gkfeed-api`.
+`make swagger-check` generates and validates Swagger 2.0. `make check` also
+runs the existing Swagger/HTTP tests and vet. The first run downloads the
+pinned tools. `make build` writes `.cache/bin/gkfeed-api`.
 
-The API contract workflow runs on PRs targeting `v1` and pushes to `v1`.
-It publishes JSON/YAML exports in a `swagger-<commit SHA>` Actions artifact.
-PRs also get an advisory compatibility report: base and head sources are
-generated with the same pinned CLI, rather than comparing against old
-generated files. Run the same comparison locally with:
+CI runs on PRs targeting `v1` and pushes to `v1`, and publishes JSON/YAML
+in a `swagger-<tested commit SHA>` Actions artifact. Consumers of the former
+raw GitHub paths should use that artifact or `/api/swagger/doc.json`.
+Swagger UI remains at `/api/swagger/index.html`.
 
-```sh
-./scripts/swagger-diff.sh <base-commit>
-```
-
-The report and both contracts are written to `.cache/swagger-report/`.
-An incompatible declared contract returns a nonzero status. Review findings
-against HTTP behavior: correcting a previously undocumented required header
-can be reported as incompatible even when runtime behavior has not changed.
-The CI comparison is advisory; generation, validation, tests and build are
-required. Tool upgrades need a separate review against the previously
-published contract because using a new generator on both sources can hide
-changes introduced by the generator itself.
-
-Swagger UI remains at `/api/swagger/index.html`, and its machine-readable
-document remains at `/api/swagger/doc.json`. Consumers of the former raw
-GitHub JSON/YAML paths should use this endpoint or download the Actions
-artifact. Local exports remain under `app/cmd/api/docs/`. Docker generates
-the document inside its build stage and embeds it in the API binary; the
-runtime image needs no generator or external documentation files.
-
-The initial pinned generation normalizes mixed historical output: blank
-HTTP response descriptions gain their standard names, and inline object
-schemas may use direct properties instead of equivalent `allOf` wrappers.
-No handler behavior changes as part of this workflow migration. Keep the
-existing HTTP contract tests; a text-only documentation edit does not need
-a new endpoint-specific Swagger test.
+Docker generates Swagger in its build stage and embeds it in the binary.
+Keep HTTP tests for contract changes; text-only documentation edits do not
+need a new endpoint-specific Swagger test.
 
 ## Configuration
 
