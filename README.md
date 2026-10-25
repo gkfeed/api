@@ -96,13 +96,11 @@ docker compose up --build -d
 Docker Compose requires `GKFEED_DATABASE_URL` for an externally provisioned
 PostgreSQL database. It does not start a database or run migrations.
 
-Set optional API settings in the shell environment or a local `.env` file before
-running Compose. It forwards the allowed origins, sync cursor secret and legacy
-`GKFEED_JWT_SECRET` fallback, WebAuthn settings, and token TTLs. Unset or empty
-values retain the API defaults, including localhost origins and a random
-process-local sync key when neither secret is set. For a hosted frontend, set
-`GKFEED_ALLOWED_ORIGINS` to its exact origin and configure WebAuthn for its RP
-ID and origin. Set a stable sync secret to preserve cursors across restarts.
+Set CORS/Origin, sync secret, WebAuthn and token TTL settings in the shell or a
+local `.env` file. Compose forwards them with empty defaults, preserving the
+API defaults and `GKFEED_JWT_SECRET` fallback. For a hosted frontend, configure
+its allowed origin and WebAuthn RP. Set a stable sync secret to preserve cursors
+across restarts.
 
 Check Compose configuration forwarding with synthetic values, without starting
 containers or connecting to PostgreSQL:
