@@ -20,6 +20,7 @@ type getItemResponse struct {
 // @Failure      404
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Router       /api/v1/item [get]
 func (h *LibraryHandler) HandleGetItemByID(w http.ResponseWriter, r *http.Request) {
 	h.getItem(w, r, queryID)

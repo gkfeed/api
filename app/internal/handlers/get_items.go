@@ -26,6 +26,7 @@ type getItemSummariesResponse struct {
 // @Param        view    query     string false "Item representation (summary omits text)" Enums(full, summary) default(full)
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200     {object}  getItemsResponse "Full items by default; summary items omit text"
 // @Failure      400
 // @Failure      401

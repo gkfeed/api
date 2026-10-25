@@ -7,13 +7,15 @@ import (
 // @Summary      Delete feed
 // @Description  Deletes a feed by ID. Only the feed owner can delete it.
 // @Tags         feeds
-// @Produce      json
+// @Produce      json,plain
 // @Param        id   query     int  true  "Feed ID"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      204
 // @Failure      400
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/delete [delete]
