@@ -3,6 +3,8 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+
+	"gkfeed/api/internal/library"
 )
 
 const defaultItemsLimit = 100
@@ -16,7 +18,7 @@ type getItemsResponse struct {
 // @Description  Returns paginated items for the authenticated user. Supports cursor-based pagination.
 // @Tags         items
 // @Produce      json
-// @Param        limit   query     int  false  "Items per page (default 100)"
+// @Param        limit   query     int  false  "Items per page" default(100) minimum(1) maximum(500)
 // @Param        cursor  query     int  false  "Pagination cursor (item ID)"
 // @Security     BasicAuth
 // @Security     BearerAuth
@@ -49,6 +51,10 @@ func (h *LibraryHandler) HandleGetItems(w http.ResponseWriter, r *http.Request) 
 func itemsPageParameters(w http.ResponseWriter, r *http.Request) (int, *int, bool) {
 	limit, ok := positiveQueryInt(w, r, "limit", defaultItemsLimit, false)
 	if !ok {
+		return 0, nil, false
+	}
+	if limit > library.MaxItemsPageLimit {
+		http.Error(w, "Invalid limit", http.StatusBadRequest)
 		return 0, nil, false
 	}
 

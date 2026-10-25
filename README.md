@@ -125,6 +125,12 @@ Successful v2 list, read and delete responses keep their v1 JSON shapes and stat
 below remain available while clients migrate. v2 has no separate lazy creation
 route or item PATCH route.
 
+`GET /api/v1/get_items` and `GET /api/v2/items` accept `limit` from 1 to 500,
+with a default of 100 when omitted or empty. The maximum matches sync and bounds
+each database result to 501 items, including one lookahead item for pagination.
+Invalid or out-of-range limits return `400` with the existing plain-text body
+`Invalid limit`.
+
 ### Unified v2 feed creation
 
 `POST /api/v2/feeds` accepts one absolute HTTP(S) URL without credentials.

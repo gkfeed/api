@@ -8,6 +8,10 @@ import (
 
 var ErrNotFound = errors.New("library resource not found")
 
+// MaxItemsPageLimit bounds ordinary item pages, matching the sync API's limit.
+// The repository reads one additional item to determine whether a page follows.
+const MaxItemsPageLimit = 500
+
 type FeedType string
 
 type Feed struct {
@@ -127,6 +131,10 @@ func (s *Service) ListItems(ctx context.Context, userID int) ([]Item, error) {
 }
 
 func (s *Service) ListItemsPage(ctx context.Context, userID int, cursor *int, limit int) (Page, error) {
+	if limit < 1 || limit > MaxItemsPageLimit || (cursor != nil && *cursor < 0) {
+		return Page{}, errors.New("invalid item pagination")
+	}
+
 	items, err := s.items.ListPage(ctx, userID, cursor, limit+1)
 	if err != nil {
 		return Page{}, err

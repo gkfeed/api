@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -22,9 +23,10 @@ func (fakeFeeds) AddBatch(context.Context, int, []CreateFeedInput) ([]AddFeedRes
 }
 
 type fakeItems struct {
-	list     []Item
-	page     []Item
-	gotLimit int
+	list      []Item
+	page      []Item
+	gotLimit  int
+	pageCalls int
 }
 
 func (f *fakeItems) Get(context.Context, int, int) (ItemDetails, error) {
@@ -33,8 +35,10 @@ func (f *fakeItems) Get(context.Context, int, int) (ItemDetails, error) {
 func (f *fakeItems) List(context.Context, int) ([]Item, error) { return f.list, nil }
 func (f *fakeItems) ListPage(_ context.Context, _ int, _ *int, limit int) ([]Item, error) {
 	f.gotLimit = limit
+	f.pageCalls++
 	return f.page, nil
 }
+
 func (f *fakeItems) Delete(context.Context, int, int) error { return nil }
 func (f *fakeItems) SyncPage(context.Context, int, int, int, int) (SyncPage, error) {
 	return SyncPage{}, nil
@@ -44,14 +48,45 @@ func (f *fakeItems) Changes(context.Context, int, int64, int) (ChangesPage, erro
 }
 
 func TestServiceShapesPagination(t *testing.T) {
-	items := &fakeItems{page: []Item{{ID: 3}, {ID: 2}, {ID: 1}}}
-	service := NewService(fakeFeeds{}, items)
-	page, err := service.ListItemsPage(t.Context(), 7, nil, 2)
-	if err != nil {
-		t.Fatal(err)
+	for _, limit := range []int{2, 500} {
+		rows := make([]Item, limit+1)
+		for i := range rows {
+			rows[i].ID = limit + 1 - i
+		}
+		items := &fakeItems{page: rows}
+		page, err := NewService(fakeFeeds{}, items).ListItemsPage(t.Context(), 7, nil, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if items.gotLimit != limit+1 || len(page.Items) != limit || page.NextCursor == nil || *page.NextCursor != 2 {
+			t.Fatalf("limit %d: page = %#v, repository limit = %d", limit, page, items.gotLimit)
+		}
 	}
-	if items.gotLimit != 3 || len(page.Items) != 2 || page.NextCursor == nil || *page.NextCursor != 2 {
-		t.Fatalf("page = %#v, repository limit = %d", page, items.gotLimit)
+}
+
+func TestServiceRejectsInvalidPagination(t *testing.T) {
+	negativeCursor := -1
+	for _, test := range []struct {
+		name   string
+		limit  int
+		cursor *int
+	}{
+		{name: "zero limit", limit: 0},
+		{name: "negative limit", limit: -1},
+		{name: "above maximum limit", limit: 501},
+		{name: "max int limit", limit: math.MaxInt},
+		{name: "negative cursor", limit: 100, cursor: &negativeCursor},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			items := &fakeItems{}
+			service := NewService(fakeFeeds{}, items)
+			if _, err := service.ListItemsPage(t.Context(), 7, test.cursor, test.limit); err == nil {
+				t.Fatalf("invalid pagination error = %v", err)
+			}
+			if items.pageCalls != 0 {
+				t.Fatalf("invalid pagination reached repository with limit %d", items.gotLimit)
+			}
+		})
 	}
 }
 
