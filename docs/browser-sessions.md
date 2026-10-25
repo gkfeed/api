@@ -57,9 +57,11 @@ Exact Origin checks follow [OWASP's CSRF guidance](https://cheatsheetseries.owas
 
 ## PostgreSQL prerequisite for infra
 
-This repository implements the API and tests. Infra must deliver the following
-schema and privileges in a migration before this API is deployed. The SQL below
-is the required contract, not a migration executed by the API:
+Infra's merged migration
+[`20261012101552_add_browser_sessions.sql`](https://github.com/gkfeed/infra/blob/76b69007f77e2cea64113b90bd74219128958209/db/migrations/20261012101552_add_browser_sessions.sql)
+provides the browser-session schema and privileges. An operator must apply it
+through infra's pinned `make migrate` before deploying this API. The SQL below
+describes the API's required contract; the API never executes it:
 
 ```sql
 CREATE TABLE public.browser_sessions (
@@ -77,10 +79,14 @@ CREATE INDEX browser_sessions_expires_at_idx ON public.browser_sessions (expires
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.browser_sessions TO gkfeed_api;
 ```
 
-Startup checks the existing canonical migration registry and the required
-browser-session columns. Missing schema prevents startup. The application role
-must have `UPDATE` for activity renewal; the existing refresh-token grants are
-insufficient. DDL stays in infra. User deletion remains outside this API's scope.
+Startup reads `public.schema_migrations` and requires `20261012101552` alongside
+the canonical schema, application roles, and item sync migration IDs. An unreadable
+registry or a missing prerequisite prevents startup. Later compatible migrations
+are allowed but do not replace the required IDs. Startup also checks read access
+to all five browser-session columns, even when the migration ID is present.
+The application role must have `UPDATE` for activity renewal; the existing
+refresh-token grants are insufficient. DDL stays in infra. User deletion remains
+outside this API's scope.
 
 ## Frontend follow-up
 

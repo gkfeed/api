@@ -78,14 +78,32 @@ func TestBrowserSessionDeleteCannotBeRestored(t *testing.T) {
 }
 
 func TestCheckBrowserSessionSchema(t *testing.T) {
-	database := useTestDatabase(t)
-	if err := CheckBrowserSessionSchema(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.Exec("DROP TABLE browser_sessions"); err != nil {
-		t.Fatal(err)
-	}
-	if err := CheckBrowserSessionSchema(t.Context()); err == nil {
-		t.Fatal("missing browser_sessions accepted")
+	for _, test := range []struct {
+		name      string
+		alter     string
+		wantReady bool
+	}{
+		{name: "required columns", wantReady: true},
+		{name: "missing table", alter: "DROP TABLE browser_sessions"},
+		{name: "missing token hash", alter: "ALTER TABLE browser_sessions RENAME COLUMN token_hash TO unavailable"},
+		{name: "missing user ID", alter: "ALTER TABLE browser_sessions RENAME COLUMN user_id TO unavailable"},
+		{name: "missing creation time", alter: "ALTER TABLE browser_sessions RENAME COLUMN created_at TO unavailable"},
+		{name: "missing activity time", alter: "ALTER TABLE browser_sessions RENAME COLUMN last_seen_at TO unavailable"},
+		{name: "missing expiry", alter: "ALTER TABLE browser_sessions RENAME COLUMN expires_at TO unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := useTestDatabase(t)
+			if test.alter != "" {
+				if _, err := database.Exec(test.alter); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := database.Exec("PRAGMA query_only = ON"); err != nil {
+				t.Fatal(err)
+			}
+			if err := CheckBrowserSessionSchema(t.Context()); (err == nil) != test.wantReady {
+				t.Fatalf("CheckBrowserSessionSchema() = %v", err)
+			}
+		})
 	}
 }
