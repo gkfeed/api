@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -25,6 +26,7 @@ type loginRequest struct {
 // @Failure      400
 // @Failure      401
 // @Failure      500
+// @Failure      503 "Password verification is busy; retry later"
 // @Router       /api/v1/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -39,6 +41,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, authenticated, err := auth.AuthenticatePassword(r.Context(), req.Username, req.Password)
+	if errors.Is(err, auth.ErrPasswordVerificationBusy) {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return

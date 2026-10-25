@@ -918,6 +918,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ResourceError"
                         }
+                    },
+                    "503": {
+                        "description": "service_unavailable: password verification is busy",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             },
@@ -1077,6 +1083,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ResourceError"
                         }
+                    },
+                    "503": {
+                        "description": "service_unavailable: password verification is busy",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             },
@@ -1159,6 +1171,12 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
+                    },
+                    "503": {
+                        "description": "service_unavailable: password verification is busy",
                         "schema": {
                             "$ref": "#/definitions/handlers.ResourceError"
                         }
@@ -1399,6 +1417,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ResourceError"
                         }
+                    },
+                    "503": {
+                        "description": "service_unavailable: password verification is busy",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
                     }
                 }
             },
@@ -1481,6 +1505,12 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "internal_error: request failed",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResourceError"
+                        }
+                    },
+                    "503": {
+                        "description": "service_unavailable: password verification is busy",
                         "schema": {
                             "$ref": "#/definitions/handlers.ResourceError"
                         }
@@ -1630,6 +1660,9 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error"
+                    },
+                    "503": {
+                        "description": "Password verification is busy; retry later"
                     }
                 }
             }
@@ -1739,7 +1772,8 @@ const docTemplate = `{
                         "unauthorized",
                         "not_found",
                         "internal_error",
-                        "method_not_allowed"
+                        "method_not_allowed",
+                        "service_unavailable"
                     ],
                     "example": "not_found"
                 },

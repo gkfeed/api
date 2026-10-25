@@ -8,6 +8,7 @@ definitions:
         - not_found
         - internal_error
         - method_not_allowed
+        - service_unavailable
         example: not_found
         type: string
       message:
@@ -776,6 +777,10 @@ paths:
           description: 'internal_error: request failed'
           schema:
             $ref: '#/definitions/handlers.ResourceError'
+        "503":
+          description: 'service_unavailable: password verification is busy'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -884,6 +889,10 @@ paths:
           description: 'internal_error: request failed'
           schema:
             $ref: '#/definitions/handlers.ResourceError'
+        "503":
+          description: 'service_unavailable: password verification is busy'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -936,6 +945,10 @@ paths:
             $ref: '#/definitions/handlers.ResourceError'
         "500":
           description: 'internal_error: request failed'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
+        "503":
+          description: 'service_unavailable: password verification is busy'
           schema:
             $ref: '#/definitions/handlers.ResourceError'
       security:
@@ -1092,6 +1105,10 @@ paths:
           description: 'internal_error: request failed'
           schema:
             $ref: '#/definitions/handlers.ResourceError'
+        "503":
+          description: 'service_unavailable: password verification is busy'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -1145,6 +1162,10 @@ paths:
           description: 'internal_error: request failed'
           schema:
             $ref: '#/definitions/handlers.ResourceError'
+        "503":
+          description: 'service_unavailable: password verification is busy'
+          schema:
+            $ref: '#/definitions/handlers.ResourceError'
       security:
       - BasicAuth: []
       - BearerAuth: []
@@ -1196,6 +1217,8 @@ paths:
           description: Forbidden
         '500':
           description: Internal Server Error
+        "503":
+          description: Password verification is busy; retry later
       summary: Create browser session with a password
       tags:
       - browser sessions

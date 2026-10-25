@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -21,6 +22,7 @@ import (
 // @Failure 401
 // @Failure 403
 // @Failure 500
+// @Failure 503 "Password verification is busy; retry later"
 // @Router /api/v2/sessions [post]
 func (h *AuthHandler) CreateBrowserSession(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
@@ -32,6 +34,11 @@ func (h *AuthHandler) CreateBrowserSession(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	user, ok, err := auth.AuthenticatePassword(r.Context(), req.Username, req.Password)
+	if errors.Is(err, auth.ErrPasswordVerificationBusy) {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return
