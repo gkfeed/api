@@ -243,6 +243,9 @@ func (unavailableItems) List(context.Context, int) ([]library.Item, error) {
 func (unavailableItems) ListPage(context.Context, int, *int, int) ([]library.Item, error) {
 	return nil, errors.New("library storage is unavailable")
 }
+func (unavailableItems) ListSummaryPage(context.Context, int, *int, int) ([]library.ItemSummary, error) {
+	return nil, errors.New("library storage is unavailable")
+}
 func (unavailableItems) Delete(context.Context, int, int) error {
 	return errors.New("library storage is unavailable")
 }

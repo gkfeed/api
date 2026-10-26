@@ -12,15 +12,21 @@ type getItemsResponse struct {
 	NextCursor *int      `json:"next_cursor,omitempty"`
 }
 
+type getItemSummariesResponse struct {
+	Items      []itemSummaryDTO `json:"items"`
+	NextCursor *int             `json:"next_cursor,omitempty"`
+}
+
 // @Summary      Get items
-// @Description  Returns paginated items for the authenticated user. Supports cursor-based pagination.
+// @Description  Returns paginated items for the authenticated user. Supports cursor-based pagination. The default full view includes text; view=summary omits text and does not load it from storage. Fetch a full item separately with GET /api/v2/items/{id} or GET /api/v1/item?id={id}.
 // @Tags         items
 // @Produce      json
 // @Param        limit   query     int  false  "Items per page (default 100)"
 // @Param        cursor  query     int  false  "Pagination cursor (item ID)"
+// @Param        view    query     string false "Item representation (summary omits text)" Enums(full, summary) default(full)
 // @Security     BasicAuth
 // @Security     BearerAuth
-// @Success      200     {object}  getItemsResponse
+// @Success      200     {object}  getItemsResponse "Full items by default; summary items omit text"
 // @Failure      400
 // @Failure      401
 // @Failure      500
@@ -34,6 +40,24 @@ func (h *LibraryHandler) HandleGetItems(w http.ResponseWriter, r *http.Request) 
 
 	limit, cursor, ok := itemsPageParameters(w, r)
 	if !ok {
+		return
+	}
+
+	view := "full"
+	if values, present := r.URL.Query()["view"]; present {
+		if len(values) != 1 || (values[0] != "full" && values[0] != "summary") {
+			http.Error(w, "Invalid view", http.StatusBadRequest)
+			return
+		}
+		view = values[0]
+	}
+	if view == "summary" {
+		page, err := h.service.ListItemSummariesPage(r.Context(), user.ID, cursor, limit)
+		if err != nil {
+			writeInternalServerError(w, err)
+			return
+		}
+		writeJSON(w, getItemSummariesResponse{Items: itemSummaryDTOs(page.Items), NextCursor: page.NextCursor})
 		return
 	}
 

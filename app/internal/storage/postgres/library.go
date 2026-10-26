@@ -277,7 +277,33 @@ func (r *ItemRepository) List(ctx context.Context, userID int) ([]library.Item, 
 }
 
 func (r *ItemRepository) ListPage(ctx context.Context, userID int, cursor *int, limit int) ([]library.Item, error) {
-	query := `SELECT ` + itemColumns + `
+	query, args := itemsPageQuery(itemColumns, userID, cursor, limit)
+	return r.list(ctx, query, args...)
+}
+
+func (r *ItemRepository) ListSummaryPage(ctx context.Context, userID int, cursor *int, limit int) ([]library.ItemSummary, error) {
+	query, args := itemsPageQuery("item.id, item.feed_id, item.title, item.date, item.link", userID, cursor, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query item summaries: %w", err)
+	}
+	defer rows.Close()
+	items := make([]library.ItemSummary, 0)
+	for rows.Next() {
+		var item library.ItemSummary
+		if err := rows.Scan(&item.ID, &item.FeedID, &item.Title, &item.Date, &item.Link); err != nil {
+			return nil, fmt.Errorf("scan item summary: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate item summaries: %w", err)
+	}
+	return items, nil
+}
+
+func itemsPageQuery(columns string, userID int, cursor *int, limit int) (string, []any) {
+	query := `SELECT ` + columns + `
 		FROM item JOIN feed ON item.feed_id = feed.id
 		WHERE feed.user_id = $1`
 	args := []any{userID}
@@ -287,7 +313,7 @@ func (r *ItemRepository) ListPage(ctx context.Context, userID int, cursor *int, 
 	}
 	query += fmt.Sprintf(" ORDER BY item.id DESC LIMIT $%d", len(args)+1)
 	args = append(args, limit)
-	return r.list(ctx, query, args...)
+	return query, args
 }
 
 func (r *ItemRepository) Delete(ctx context.Context, userID, itemID int) error {

@@ -75,6 +75,24 @@ func Run(t *testing.T, factory Factory) {
 		if err != nil || len(second) != 1 || second[0].ID != ids[0] {
 			t.Fatalf("second page = %#v, %v", second, err)
 		}
+		summaries, err := items.ListSummaryPage(ctx, 1, nil, 2)
+		if err != nil || len(summaries) != len(first) {
+			t.Fatalf("summary page = %#v, %v", summaries, err)
+		}
+		for i, item := range first {
+			want := library.ItemSummary{ID: item.ID, FeedID: item.FeedID, Title: item.Title, Date: item.Date, Link: item.Link}
+			if summaries[i] != want {
+				t.Fatalf("summary = %#v, want %#v", summaries[i], want)
+			}
+		}
+		summaryTail, err := items.ListSummaryPage(ctx, 1, &cursor, 2)
+		if err != nil || len(summaryTail) != 1 || summaryTail[0].ID != ids[0] {
+			t.Fatalf("summary tail = %#v, %v", summaryTail, err)
+		}
+		emptySummaries, err := items.ListSummaryPage(ctx, 99, nil, 2)
+		if err != nil || emptySummaries == nil || len(emptySummaries) != 0 {
+			t.Fatalf("empty summaries = %#v, %v", emptySummaries, err)
+		}
 
 		if err := items.Delete(ctx, 2, ids[0]); !errors.Is(err, library.ErrNotFound) {
 			t.Fatalf("foreign Delete() error = %v", err)

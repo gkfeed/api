@@ -36,6 +36,9 @@ func (f *fakeItems) ListPage(_ context.Context, _ int, _ *int, limit int) ([]Ite
 	return f.page, nil
 }
 func (f *fakeItems) Delete(context.Context, int, int) error { return nil }
+func (f *fakeItems) ListSummaryPage(context.Context, int, *int, int) ([]ItemSummary, error) {
+	return nil, nil
+}
 func (f *fakeItems) SyncPage(context.Context, int, int, int, int) (SyncPage, error) {
 	return SyncPage{}, nil
 }
