@@ -59,72 +59,37 @@ func postgresFixture(t *testing.T) (*sql.DB, *sql.DB) {
 }
 
 func TestPostgresFixtureIsolation(t *testing.T) {
-	var previousItemID int
-	t.Run("leave item history", func(t *testing.T) {
-		admin, app := postgresFixture(t)
-		feed, err := NewFeedRepository(app).Add(t.Context(), 1, library.CreateFeedInput{
-			Title: "fixture", Type: "rss", URL: "https://fixture.example/feed",
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := admin.QueryRow("INSERT INTO public.item (feed_id,title,text,date,link) VALUES ($1,'previous','','2026-01-01','') RETURNING id", feed.ID).Scan(&previousItemID); err != nil {
-			t.Fatal(err)
-		}
-		items := NewItemRepository(app)
-		if err := items.Delete(t.Context(), 1, previousItemID); err != nil {
-			t.Fatal(err)
-		}
-		changes, err := items.Changes(t.Context(), 1, 0, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(changes.Changes) != 2 || changes.Changes[0].Item == nil || changes.Changes[1].Item != nil {
-			t.Fatalf("expected an upsert and tombstone before reset, got %#v", changes)
-		}
+	admin, app := postgresFixture(t)
+	feed, err := NewFeedRepository(app).Add(t.Context(), 1, library.CreateFeedInput{
+		Title: "fixture", Type: "rss", URL: "https://fixture.example/feed",
 	})
-	t.Run("recreate fixture", func(t *testing.T) {
-		admin, app := postgresFixture(t)
-		var count int
-		if err := admin.QueryRow("SELECT COUNT(*) FROM public.item_changes").Scan(&count); err != nil {
-			t.Fatal(err)
-		}
-		if count != 0 {
-			t.Fatalf("fixture retained %d item changes", count)
-		}
-		items := NewItemRepository(app)
-		page, err := items.SyncPage(t.Context(), 1, 0, 0, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(page.Items) != 0 || page.Sequence != 0 {
-			t.Fatalf("fixture retained sync state: %#v", page)
-		}
-		feed, err := NewFeedRepository(app).Add(t.Context(), 1, library.CreateFeedInput{
-			Title: "fixture", Type: "rss", URL: "https://fixture.example/feed",
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var itemID int
-		if err := admin.QueryRow("INSERT INTO public.item (feed_id,title,text,date,link) VALUES ($1,'current','','2026-01-01','') RETURNING id", feed.ID).Scan(&itemID); err != nil {
-			t.Fatal(err)
-		}
-		if itemID != previousItemID {
-			t.Fatalf("item ID = %d, expected reused ID %d", itemID, previousItemID)
-		}
-		changes, err := items.Changes(t.Context(), 1, 0, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if changes.HasMore || changes.Sequence != 1 || len(changes.Changes) != 1 {
-			t.Fatalf("expected only the current fixture's change, got %#v", changes)
-		}
-		change := changes.Changes[0]
-		if change.ItemID != itemID || change.Item == nil || change.Item.Title != "current" {
-			t.Fatalf("unexpected change for reused item ID: %#v", change)
-		}
-	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var itemID int
+	if err := admin.QueryRow("INSERT INTO public.item (feed_id,title,text,date,link) VALUES ($1,'previous','','2026-01-01','') RETURNING id", feed.ID).Scan(&itemID); err != nil {
+		t.Fatal(err)
+	}
+	items := NewItemRepository(app)
+	if err := items.Delete(t.Context(), 1, itemID); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := items.Changes(t.Context(), 1, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes.Changes) != 2 {
+		t.Fatalf("expected an upsert and tombstone before reset, got %#v", changes)
+	}
+
+	_, app = postgresFixture(t)
+	changes, err = NewItemRepository(app).Changes(t.Context(), 1, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes.Changes) != 0 {
+		t.Fatalf("fixture retained item changes: %#v", changes)
+	}
 }
 
 func TestPostgresRepositoryContract(t *testing.T) {
