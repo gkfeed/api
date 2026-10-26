@@ -86,7 +86,6 @@ func (h *AuthHandler) BeginLogin(w http.ResponseWriter, _ *http.Request) {
 // @Failure      500
 // @Router       /api/v1/auth/login/finish [post]
 func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(r.Body)
 	if err != nil {
