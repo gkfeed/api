@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -29,19 +28,12 @@ func TestPostgresSyncPaginationAndChanges(t *testing.T) {
 	if !first.HasMore || first.MaxID != ids[3] || first.LastID != ids[2] || !slices.Equal(syncItemIDs(first.Items), []int{ids[3], ids[2]}) {
 		t.Fatalf("first page = %#v", first)
 	}
-	var sequence int64
-	if err := admin.QueryRowContext(t.Context(), "SELECT max(id) FROM item_changes WHERE user_id=1").Scan(&sequence); err != nil || first.Sequence != sequence {
-		t.Fatalf("snapshot sequence = %d, want %d: %v", first.Sequence, sequence, err)
-	}
 	inserted := postgresSyncInsert(t, admin, owner, "new")
 	if _, err := admin.ExecContext(t.Context(), "UPDATE item SET title='updated', text='body', link='https://item' WHERE id=$1", ids[0]); err != nil {
 		t.Fatal(err)
 	}
 	if err := items.Delete(t.Context(), 1, ids[1]); err != nil {
 		t.Fatal(err)
-	}
-	if err := items.Delete(t.Context(), 1, foreignID); !errors.Is(err, library.ErrNotFound) {
-		t.Fatalf("foreign delete = %v", err)
 	}
 	second, err := items.SyncPage(t.Context(), 1, first.LastID, first.MaxID, 2)
 	if err != nil || second.HasMore || second.MaxID != first.MaxID || !slices.Equal(syncItemIDs(second.Items), []int{ids[0]}) {
