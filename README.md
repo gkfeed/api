@@ -95,6 +95,20 @@ docker compose up --build -d
 
 Docker Compose requires `GKFEED_DATABASE_URL` for an externally provisioned
 PostgreSQL database. It does not start a database or run migrations.
+
+Set CORS/Origin, sync secret, WebAuthn and token TTL settings in the shell or a
+local `.env` file. Compose forwards them with empty defaults, preserving the
+API defaults and `GKFEED_JWT_SECRET` fallback. For a hosted frontend, configure
+its allowed origin and WebAuthn RP. Set a stable sync secret to preserve cursors
+across restarts.
+
+Check Compose configuration forwarding with synthetic values, without starting
+containers or connecting to PostgreSQL:
+
+```sh
+env -u GKFEED_TEST_DATABASE_URL python3 tests/test_compose_config.py
+```
+
 The deployment workflow runs tests on pushes to `master`, but deployment
 requires a manual run with `cutover_ready` confirmed. Confirm that the infra
 schema, grants, importer, sequence synchronization, and cutover checks are
