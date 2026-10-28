@@ -33,11 +33,11 @@ func TestNullPasswordLookups(t *testing.T) {
 	if _, err := database.Exec("INSERT INTO users (id, name, hashed_password) VALUES (2, 'passwordless', NULL)"); err != nil {
 		t.Fatal(err)
 	}
-	byName, err := GetUserFromDB("passwordless")
+	byName, err := GetUserFromDB(t.Context(), "passwordless")
 	if err != nil {
 		t.Fatal(err)
 	}
-	byID, err := GetUserFromDBByID(2)
+	byID, err := GetUserFromDBByID(t.Context(), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,18 +51,18 @@ func TestWebAuthnLookupForPasswordlessUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	credential := webauthn.Credential{ID: []byte("passkey")}
-	if err := AddWebAuthnCredential(2, credential, "key"); err != nil {
+	if err := AddWebAuthnCredential(t.Context(), 2, credential, "key"); err != nil {
 		t.Fatal(err)
 	}
-	id, err := GetWebAuthnUserIDByCredentialID(credential.ID)
+	id, err := GetWebAuthnUserIDByCredentialID(t.Context(), credential.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := GetUserFromDBByID(id)
+	user, err := GetUserFromDBByID(t.Context(), id)
 	if err != nil || user.ID != 2 || user.HashedPassword.Valid {
 		t.Fatalf("user = %#v, %v", user, err)
 	}
-	credentials, err := GetWebAuthnCredentialsByUserID(user.ID)
+	credentials, err := GetWebAuthnCredentialsByUserID(t.Context(), user.ID)
 	if err != nil || len(credentials) != 1 || string(credentials[0].ID) != "passkey" {
 		t.Fatalf("credentials = %#v, %v", credentials, err)
 	}

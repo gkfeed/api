@@ -79,11 +79,18 @@ func TestPostgresAuthContract(t *testing.T) {
 	admin, app := postgresFixture(t)
 	db.Configure(app)
 	t.Cleanup(func() { db.Configure(nil) })
-	byName, err := db.GetUserFromDB("owner")
+	var canUpdateRefreshTokens bool
+	if err := app.QueryRowContext(t.Context(), "SELECT has_table_privilege(current_user, 'public.refresh_tokens', 'UPDATE')").Scan(&canUpdateRefreshTokens); err != nil {
+		t.Fatal(err)
+	}
+	if canUpdateRefreshTokens {
+		t.Fatal("auth contract must work without UPDATE on refresh_tokens")
+	}
+	byName, err := db.GetUserFromDB(t.Context(), "owner")
 	if err != nil {
 		t.Fatal(err)
 	}
-	byID, err := db.GetUserFromDBByID(1)
+	byID, err := db.GetUserFromDBByID(t.Context(), 1)
 	if err != nil || byName != byID || byID.HashedPassword.Valid {
 		t.Fatalf("user = %#v, %v", byID, err)
 	}
@@ -103,45 +110,45 @@ func TestPostgresAuthContract(t *testing.T) {
 	if _, err := admin.Exec("UPDATE users SET hashed_password=$1 WHERE id=2", hash); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := auth.AuthenticatePassword("other", "secret"); err != nil || !ok {
+	if _, ok, err := auth.AuthenticatePassword(t.Context(), "other", "secret"); err != nil || !ok {
 		t.Fatalf("login = %v, %v", ok, err)
 	}
 	credential := webauthn.Credential{ID: []byte("passkey")}
-	if err := db.AddWebAuthnCredential(1, credential, "key"); err != nil {
+	if err := db.AddWebAuthnCredential(t.Context(), 1, credential, "key"); err != nil {
 		t.Fatal(err)
 	}
-	id, err := db.GetWebAuthnUserIDByCredentialID(credential.ID)
+	id, err := db.GetWebAuthnUserIDByCredentialID(t.Context(), credential.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := db.GetUserFromDBByID(id)
+	user, err := db.GetUserFromDBByID(t.Context(), id)
 	if err != nil || user.ID != 1 || user.HashedPassword.Valid {
 		t.Fatalf("passkey user = %#v, %v", user, err)
 	}
-	if err := db.UpdateWebAuthnCredential(credential); err != nil {
+	if err := db.UpdateWebAuthnCredential(t.Context(), credential); err != nil {
 		t.Fatal(err)
 	}
-	credentials, err := db.GetWebAuthnCredentialsByUserID(1)
+	credentials, err := db.GetWebAuthnCredentialsByUserID(t.Context(), 1)
 	if err != nil || len(credentials) != 1 {
 		t.Fatalf("credentials = %#v, %v", credentials, err)
 	}
-	infos, err := db.ListUserWebAuthnCredentials(1)
+	infos, err := db.ListUserWebAuthnCredentials(t.Context(), 1)
 	if err != nil || len(infos) != 1 {
 		t.Fatalf("credential infos = %#v, %v", infos, err)
 	}
 	tokenHash := []byte("test-token-digest")
 	family := []byte("test-family")
-	if err := db.CreateAuthRefreshToken(1, tokenHash, family, time.Now().Add(time.Hour)); err != nil {
+	if err := db.CreateAuthRefreshToken(t.Context(), 1, tokenHash, family, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	rotation, err := db.RotateAuthRefreshToken(tokenHash, []byte("next-token-digest"), time.Now(), time.Now().Add(time.Hour))
+	rotation, err := db.RotateAuthRefreshToken(t.Context(), tokenHash, []byte("next-token-digest"), time.Now(), time.Now().Add(time.Hour))
 	if err != nil || rotation.User.ID != 1 {
 		t.Fatalf("rotation = %#v, %v", rotation, err)
 	}
-	if _, err := db.RevokeAuthRefreshToken([]byte("next-token-digest"), time.Now()); err != nil {
+	if _, err := db.RevokeAuthRefreshToken(t.Context(), []byte("next-token-digest"), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := db.DeleteWebAuthnCredential(credential.ID, 1); err != nil || !ok {
+	if ok, err := db.DeleteWebAuthnCredential(t.Context(), credential.ID, 1); err != nil || !ok {
 		t.Fatalf("delete credential = %v, %v", ok, err)
 	}
 	// The application role must not acquire schema ownership.

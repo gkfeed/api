@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -35,21 +36,21 @@ func refreshID(hash, family []byte) string {
 func refreshPrefix(hash []byte) string   { return hex.EncodeToString(hash) + ":%" }
 func familyPattern(family []byte) string { return "%:" + hex.EncodeToString(family) }
 
-func CreateAuthRefreshToken(userID int, tokenHash, familyID []byte, expiresAt time.Time) error {
-	tx, err := beginRefreshTransaction()
+func CreateAuthRefreshToken(ctx context.Context, userID int, tokenHash, familyID []byte, expiresAt time.Time) error {
+	tx, err := beginRefreshTransaction(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", refreshID(tokenHash, familyID), userID, expiresAt)
+	_, err = tx.ExecContext(ctx, "INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", refreshID(tokenHash, familyID), userID, expiresAt)
 	if err != nil {
 		return fmt.Errorf("insert refresh token: %w", err)
 	}
 	return tx.Commit()
 }
 
-func RotateAuthRefreshToken(oldHash, newHash []byte, now, expiresAt time.Time) (RefreshRotation, error) {
-	tx, err := beginRefreshTransaction()
+func RotateAuthRefreshToken(ctx context.Context, oldHash, newHash []byte, now, expiresAt time.Time) (RefreshRotation, error) {
+	tx, err := beginRefreshTransaction(ctx)
 	if err != nil {
 		return RefreshRotation{}, err
 	}
@@ -58,7 +59,7 @@ func RotateAuthRefreshToken(oldHash, newHash []byte, now, expiresAt time.Time) (
 	var userID int
 	var name string
 	var expiry time.Time
-	err = tx.QueryRow(`SELECT token.id, token.user_id, users.name, token.expires_at
+	err = tx.QueryRowContext(ctx, `SELECT token.id, token.user_id, users.name, token.expires_at
  FROM refresh_tokens AS token JOIN users ON users.id = token.user_id
  WHERE token.id LIKE $1`, refreshPrefix(oldHash)).Scan(&id, &userID, &name, &expiry)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -77,7 +78,7 @@ func RotateAuthRefreshToken(oldHash, newHash []byte, now, expiresAt time.Time) (
 	}
 	rotation := RefreshRotation{User: models.User{ID: userID, Name: name}, FamilyID: family}
 	if !expiry.After(now) {
-		if err := revokeFamily(tx, family); err != nil {
+		if err := revokeFamily(ctx, tx, family); err != nil {
 			return RefreshRotation{}, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -85,13 +86,13 @@ func RotateAuthRefreshToken(oldHash, newHash []byte, now, expiresAt time.Time) (
 		}
 		return rotation, &refreshTokenReuseError{rotation}
 	}
-	if _, err := tx.Exec("DELETE FROM refresh_tokens WHERE id = $1", id); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM refresh_tokens WHERE id = $1", id); err != nil {
 		return RefreshRotation{}, fmt.Errorf("consume refresh token: %w", err)
 	}
-	if _, err := tx.Exec("INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", id, userID, time.Unix(0, 0)); err != nil {
+	if _, err := tx.ExecContext(ctx, "INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", id, userID, time.Unix(0, 0)); err != nil {
 		return RefreshRotation{}, fmt.Errorf("record consumed refresh token: %w", err)
 	}
-	if _, err := tx.Exec("INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", refreshID(newHash, family), userID, expiresAt); err != nil {
+	if _, err := tx.ExecContext(ctx, "INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", refreshID(newHash, family), userID, expiresAt); err != nil {
 		return RefreshRotation{}, fmt.Errorf("insert rotated refresh token: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -100,14 +101,14 @@ func RotateAuthRefreshToken(oldHash, newHash []byte, now, expiresAt time.Time) (
 	return rotation, nil
 }
 
-func RevokeAuthRefreshToken(tokenHash []byte, _ time.Time) ([]byte, error) {
-	tx, err := beginRefreshTransaction()
+func RevokeAuthRefreshToken(ctx context.Context, tokenHash []byte, _ time.Time) ([]byte, error) {
+	tx, err := beginRefreshTransaction(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 	var id string
-	err = tx.QueryRow("SELECT id FROM refresh_tokens WHERE id LIKE $1", refreshPrefix(tokenHash)).Scan(&id)
+	err = tx.QueryRowContext(ctx, "SELECT id FROM refresh_tokens WHERE id LIKE $1", refreshPrefix(tokenHash)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("%w: token not found", ErrInvalidRefreshToken)
 	}
@@ -122,7 +123,7 @@ func RevokeAuthRefreshToken(tokenHash []byte, _ time.Time) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode refresh-token family: %w", err)
 	}
-	if err := revokeFamily(tx, family); err != nil {
+	if err := revokeFamily(ctx, tx, family); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -131,13 +132,13 @@ func RevokeAuthRefreshToken(tokenHash []byte, _ time.Time) ([]byte, error) {
 	return family, nil
 }
 
-func RevokeUserAuthRefreshTokens(userID int, _ time.Time) error {
-	tx, err := beginRefreshTransaction()
+func RevokeUserAuthRefreshTokens(ctx context.Context, userID int, _ time.Time) error {
+	tx, err := beginRefreshTransaction(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec("DELETE FROM refresh_tokens WHERE user_id = $1", userID); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM refresh_tokens WHERE user_id = $1", userID); err != nil {
 		return fmt.Errorf("revoke user refresh tokens: %w", err)
 	}
 	return tx.Commit()
@@ -146,17 +147,17 @@ func RevokeUserAuthRefreshTokens(userID int, _ time.Time) error {
 // All refresh mutations take one transaction lock. This keeps family
 // revocation, logout, and rotation ordered even though the application role
 // has no UPDATE permission on the infra-owned refresh_tokens table.
-func beginRefreshTransaction() (*sql.Tx, error) {
+func beginRefreshTransaction(ctx context.Context) (*sql.Tx, error) {
 	database, err := getDB()
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	tx, err := database.Begin()
+	tx, err := database.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin refresh-token transaction: %w", err)
 	}
 	if !strings.Contains(fmt.Sprintf("%T", database.Driver()), "sqlite3") {
-		if _, err := tx.Exec("SELECT pg_advisory_xact_lock(281474976710655)"); err != nil {
+		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(281474976710655)"); err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("lock refresh-token transaction: %w", err)
 		}
@@ -164,8 +165,8 @@ func beginRefreshTransaction() (*sql.Tx, error) {
 	return tx, nil
 }
 
-func revokeFamily(tx *sql.Tx, family []byte) error {
-	rows, err := tx.Query("SELECT id, user_id FROM refresh_tokens WHERE id LIKE $1", familyPattern(family))
+func revokeFamily(ctx context.Context, tx *sql.Tx, family []byte) error {
+	rows, err := tx.QueryContext(ctx, "SELECT id, user_id FROM refresh_tokens WHERE id LIKE $1", familyPattern(family))
 	if err != nil {
 		return fmt.Errorf("find refresh-token family: %w", err)
 	}
@@ -187,11 +188,11 @@ func revokeFamily(tx *sql.Tx, family []byte) error {
 		return fmt.Errorf("read refresh-token family: %w", err)
 	}
 	rows.Close()
-	if _, err := tx.Exec("DELETE FROM refresh_tokens WHERE id LIKE $1", familyPattern(family)); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM refresh_tokens WHERE id LIKE $1", familyPattern(family)); err != nil {
 		return fmt.Errorf("revoke refresh-token family: %w", err)
 	}
 	for _, value := range tokens {
-		if _, err := tx.Exec("INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", value.id, value.userID, time.Unix(0, 0)); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ($1, $2, $3)", value.id, value.userID, time.Unix(0, 0)); err != nil {
 			return fmt.Errorf("record revoked refresh token: %w", err)
 		}
 	}

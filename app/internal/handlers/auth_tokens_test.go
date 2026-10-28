@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -68,8 +70,11 @@ func (tx *commitTx) Commit() error {
 var commitDriverSequence atomic.Int64
 
 func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
-	for _, flow := range []string{"logout", "logout-all", "refresh reuse"} {
+	for _, flow := range []string{"logout", "logout-all", "refresh reuse", "logout after cancellation", "logout-all after cancellation", "refresh reuse after cancellation"} {
 		t.Run(flow, func(t *testing.T) {
+			operation := strings.TrimSuffix(flow, " after cancellation")
+			refreshCtx, cancelRefresh := context.WithCancel(t.Context())
+			defer cancelRefresh()
 			gate := &sqlite3CommitDriver{committed: make(chan struct{}), release: make(chan struct{})}
 			driverName := fmt.Sprintf("sqlite3-commit-gate-%d", commitDriverSequence.Add(1))
 			sql.Register(driverName, gate)
@@ -88,7 +93,7 @@ func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
 			h := NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
 			// Main creates another handler for passkeys. It must share the same lock.
 			revoker := NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
-			tokens, err := h.issueTokenPair(models.User{ID: 1, Name: "reader"})
+			tokens, err := h.issueTokenPair(t.Context(), models.User{ID: 1, Name: "reader"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,7 +104,7 @@ func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
 			refreshDone := make(chan *httptest.ResponseRecorder, 1)
 			go func() {
 				w := httptest.NewRecorder()
-				h.Refresh(w, httptest.NewRequest("POST", "/", strings.NewReader(`{"refresh_token":"`+tokens.RefreshToken+`"}`)))
+				h.Refresh(w, httptest.NewRequest("POST", "/", strings.NewReader(`{"refresh_token":"`+tokens.RefreshToken+`"}`)).WithContext(refreshCtx))
 				refreshDone <- w
 			}()
 			select {
@@ -107,13 +112,16 @@ func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
 			case <-time.After(5 * time.Second):
 				t.Fatal("refresh did not reach commit")
 			}
+			if operation != flow {
+				cancelRefresh()
+			}
 			revoked := make(chan *httptest.ResponseRecorder, 1)
 			started := make(chan struct{})
 			go func() {
 				w := httptest.NewRecorder()
 				r := httptest.NewRequest("POST", "/", strings.NewReader(`{"refresh_token":"`+tokens.RefreshToken+`"}`))
 				close(started)
-				switch flow {
+				switch operation {
 				case "logout":
 					revoker.Logout(w, r)
 				case "logout-all":
@@ -153,7 +161,7 @@ func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
 				t.Fatalf("refresh = %d, %s", refreshResponse.Code, refreshResponse.Body.String())
 			}
 			want := http.StatusNoContent
-			if flow == "refresh reuse" {
+			if operation == "refresh reuse" {
 				want = http.StatusUnauthorized
 			}
 			if revokeResponse.Code != want {
@@ -167,6 +175,56 @@ func TestConcurrentRefreshCannotSurviveRevocation(t *testing.T) {
 				if _, ok := sessions.Get(token); ok {
 					t.Error("revoked access token survived concurrent refresh")
 				}
+			}
+		})
+	}
+}
+
+// Hold the lifecycle lock as another token request would. Each handler must
+// honor its deadline without waiting for that request to finish.
+func TestTokenHandlersCancelLifecycleWait(t *testing.T) {
+	for _, flow := range []string{"issue", "refresh", "logout", "logout-all"} {
+		t.Run(flow, func(t *testing.T) {
+			sessions := auth.NewSessionStore(time.Hour)
+			h := NewAuthHandlerWithSessions(config.Config{}, nil, sessions)
+			unlock, err := sessions.LockLifecycle(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer unlock()
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				user := models.User{ID: 1, Name: "reader"}
+				if flow == "issue" {
+					_, err := h.issueTokenPair(ctx, user)
+					done <- err
+					return
+				}
+				w := httptest.NewRecorder()
+				r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"refresh_token":"token"}`)).WithContext(auth.WithUser(ctx, user))
+				switch flow {
+				case "refresh":
+					h.Refresh(w, r)
+				case "logout":
+					h.Logout(w, r)
+				case "logout-all":
+					h.LogoutAll(w, r)
+				}
+				if w.Code != http.StatusInternalServerError {
+					done <- fmt.Errorf("status = %d, body = %s", w.Code, w.Body.String())
+					return
+				}
+				done <- ctx.Err()
+			}()
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("canceled lifecycle wait = %v", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("handler still waits for the lifecycle lock after its deadline")
 			}
 		})
 	}

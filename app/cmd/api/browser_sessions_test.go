@@ -231,7 +231,7 @@ func TestBrowserPasskeySession(t *testing.T) {
 		t.Fatal(err)
 	}
 	credentialID := []byte("test-passkey")
-	if err := db.AddWebAuthnCredential(1, webauthn.Credential{ID: credentialID, PublicKey: publicKey}, "test"); err != nil {
+	if err := db.AddWebAuthnCredential(t.Context(), 1, webauthn.Credential{ID: credentialID, PublicKey: publicKey}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	handler := newHandler(cfg)

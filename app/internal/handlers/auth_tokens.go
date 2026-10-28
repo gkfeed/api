@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,8 +24,11 @@ type tokenResponse struct {
 	RefreshExpiresIn int64  `json:"refresh_expires_in"`
 }
 
-func (h *AuthHandler) issueTokenPair(user models.User) (tokenResponse, error) {
-	unlock := h.sessions.LockLifecycle()
+func (h *AuthHandler) issueTokenPair(ctx context.Context, user models.User) (tokenResponse, error) {
+	unlock, err := h.sessions.LockLifecycle(ctx)
+	if err != nil {
+		return tokenResponse{}, err
+	}
 	defer unlock()
 	accessToken, err := auth.GenerateOpaqueToken()
 	if err != nil {
@@ -38,7 +42,7 @@ func (h *AuthHandler) issueTokenPair(user models.User) (tokenResponse, error) {
 	if err != nil {
 		return tokenResponse{}, err
 	}
-	if err := db.CreateAuthRefreshToken(
+	if err := db.CreateAuthRefreshToken(ctx,
 		user.ID,
 		auth.DigestToken(refreshToken),
 		familyID,
@@ -96,9 +100,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	err = func() error {
-		unlock := h.sessions.LockLifecycle()
+		unlock, err := h.sessions.LockLifecycle(r.Context())
+		if err != nil {
+			return err
+		}
 		defer unlock()
-		rotation, err := db.RotateAuthRefreshToken(
+		rotation, err := db.RotateAuthRefreshToken(r.Context(),
 			auth.DigestToken(req.RefreshToken), auth.DigestToken(newRefreshToken),
 			now, now.Add(h.cfg.EffectiveRefreshTokenTTL()),
 		)
@@ -146,9 +153,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := func() error {
-		unlock := h.sessions.LockLifecycle()
+		unlock, err := h.sessions.LockLifecycle(r.Context())
+		if err != nil {
+			return err
+		}
 		defer unlock()
-		familyID, err := db.RevokeAuthRefreshToken(auth.DigestToken(req.RefreshToken), time.Now())
+		familyID, err := db.RevokeAuthRefreshToken(r.Context(), auth.DigestToken(req.RefreshToken), time.Now())
 		if err != nil {
 			return err
 		}
@@ -182,9 +192,12 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := func() error {
-		unlock := h.sessions.LockLifecycle()
+		unlock, err := h.sessions.LockLifecycle(r.Context())
+		if err != nil {
+			return err
+		}
 		defer unlock()
-		if err := db.RevokeUserAuthRefreshTokens(user.ID, time.Now()); err != nil {
+		if err := db.RevokeUserAuthRefreshTokens(r.Context(), user.ID, time.Now()); err != nil {
 			return fmt.Errorf("revoke user refresh tokens: %w", err)
 		}
 		h.sessions.RevokeUser(user.ID)
