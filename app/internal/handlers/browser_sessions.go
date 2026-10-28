@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -21,6 +22,7 @@ import (
 // @Failure 401
 // @Failure 403
 // @Failure 500
+// @Failure 503 "Password verification is busy; retry later"
 // @Router /api/v2/sessions [post]
 func (h *AuthHandler) CreateBrowserSession(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
@@ -31,7 +33,12 @@ func (h *AuthHandler) CreateBrowserSession(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Username and password are required", http.StatusBadRequest)
 		return
 	}
-	user, ok, err := auth.AuthenticatePassword(req.Username, req.Password)
+	user, ok, err := auth.AuthenticatePassword(r.Context(), req.Username, req.Password)
+	if errors.Is(err, auth.ErrPasswordVerificationBusy) {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return
@@ -123,7 +130,7 @@ func (h *AuthHandler) FinishBrowserLogin(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid credential assertion response", http.StatusBadRequest)
 		return
 	}
-	_, user, err := h.webAuthnService.FinishLogin(parsed)
+	_, user, err := h.webAuthnService.FinishLogin(r.Context(), parsed)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return

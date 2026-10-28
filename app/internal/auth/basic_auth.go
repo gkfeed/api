@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log"
 	"net/http"
 )
@@ -9,7 +10,12 @@ func BasicAuth(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		if ok {
-			user, authenticated, err := authenticateWithDB(username, password)
+			user, authenticated, err := authenticateWithDB(r.Context(), username, password)
+			if errors.Is(err, ErrPasswordVerificationBusy) {
+				w.Header().Set("Retry-After", "1")
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
 			if err != nil {
 				log.Printf("authentication failed: %v", err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

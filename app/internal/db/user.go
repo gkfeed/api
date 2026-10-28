@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -8,13 +9,13 @@ import (
 	"gkfeed/api/internal/models"
 )
 
-func GetUserFromDB(name string) (models.User, error) {
+func GetUserFromDB(ctx context.Context, name string) (models.User, error) {
 	database, err := getDB()
 	if err != nil {
 		return models.User{}, fmt.Errorf("open database: %w", err)
 	}
 	var user models.User
-	err = database.QueryRow(
+	err = database.QueryRowContext(ctx,
 		"SELECT id, name, hashed_password FROM users WHERE name = $1",
 		name,
 	).Scan(&user.ID, &user.Name, &user.HashedPassword)
@@ -28,13 +29,13 @@ func GetUserFromDB(name string) (models.User, error) {
 	return user, nil
 }
 
-func GetUserFromDBByID(id int) (models.User, error) {
+func GetUserFromDBByID(ctx context.Context, id int) (models.User, error) {
 	database, err := getDB()
 	if err != nil {
 		return models.User{}, fmt.Errorf("open database: %w", err)
 	}
 	var user models.User
-	err = database.QueryRow(
+	err = database.QueryRowContext(ctx,
 		"SELECT id, name, hashed_password FROM users WHERE id = $1",
 		id,
 	).Scan(&user.ID, &user.Name, &user.HashedPassword)

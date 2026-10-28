@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"log"
@@ -193,7 +194,7 @@ func TestAuthenticateDoesNotLogAuthorizationHeader(t *testing.T) {
 func replaceUserLookup(t *testing.T, lookup func(string) (models.User, error)) {
 	t.Helper()
 	original := getUser
-	getUser = lookup
+	getUser = func(_ context.Context, name string) (models.User, error) { return lookup(name) }
 	t.Cleanup(func() { getUser = original })
 }
 

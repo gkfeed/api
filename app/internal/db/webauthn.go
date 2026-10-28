@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -9,7 +10,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-func AddWebAuthnCredential(userID int, credential webauthn.Credential, name string) error {
+func AddWebAuthnCredential(ctx context.Context, userID int, credential webauthn.Credential, name string) error {
 	database, err := getDB()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
@@ -19,7 +20,7 @@ func AddWebAuthnCredential(userID int, credential webauthn.Credential, name stri
 		return fmt.Errorf("marshal credential: %w", err)
 	}
 
-	_, err = database.Exec(
+	_, err = database.ExecContext(ctx,
 		"INSERT INTO webauthn_credentials (id, user_id, credential, name) VALUES ($1, $2, $3, $4)",
 		credential.ID, userID, string(data), name,
 	)
@@ -29,7 +30,7 @@ func AddWebAuthnCredential(userID int, credential webauthn.Credential, name stri
 	return nil
 }
 
-func UpdateWebAuthnCredential(credential webauthn.Credential) error {
+func UpdateWebAuthnCredential(ctx context.Context, credential webauthn.Credential) error {
 	database, err := getDB()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
@@ -39,7 +40,7 @@ func UpdateWebAuthnCredential(credential webauthn.Credential) error {
 		return fmt.Errorf("marshal credential: %w", err)
 	}
 
-	_, err = database.Exec(
+	_, err = database.ExecContext(ctx,
 		"UPDATE webauthn_credentials SET credential = $1, last_used_at = CURRENT_TIMESTAMP WHERE id = $2",
 		string(data), credential.ID,
 	)
@@ -49,12 +50,12 @@ func UpdateWebAuthnCredential(credential webauthn.Credential) error {
 	return nil
 }
 
-func GetWebAuthnCredentialsByUserID(userID int) ([]webauthn.Credential, error) {
+func GetWebAuthnCredentialsByUserID(ctx context.Context, userID int) ([]webauthn.Credential, error) {
 	database, err := getDB()
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	rows, err := database.Query("SELECT credential FROM webauthn_credentials WHERE user_id = $1", userID)
+	rows, err := database.QueryContext(ctx, "SELECT credential FROM webauthn_credentials WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, fmt.Errorf("query webauthn credentials: %w", err)
 	}
@@ -78,13 +79,13 @@ func GetWebAuthnCredentialsByUserID(userID int) ([]webauthn.Credential, error) {
 	return credentials, nil
 }
 
-func GetWebAuthnUserIDByCredentialID(credentialID []byte) (int, error) {
+func GetWebAuthnUserIDByCredentialID(ctx context.Context, credentialID []byte) (int, error) {
 	database, err := getDB()
 	if err != nil {
 		return 0, fmt.Errorf("open database: %w", err)
 	}
 	var userID int
-	err = database.QueryRow(
+	err = database.QueryRowContext(ctx,
 		"SELECT user_id FROM webauthn_credentials WHERE id = $1",
 		credentialID,
 	).Scan(&userID)
@@ -97,12 +98,12 @@ func GetWebAuthnUserIDByCredentialID(credentialID []byte) (int, error) {
 	return userID, nil
 }
 
-func DeleteWebAuthnCredential(credentialID []byte, userID int) (bool, error) {
+func DeleteWebAuthnCredential(ctx context.Context, credentialID []byte, userID int) (bool, error) {
 	database, err := getDB()
 	if err != nil {
 		return false, fmt.Errorf("open database: %w", err)
 	}
-	result, err := database.Exec(
+	result, err := database.ExecContext(ctx,
 		"DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2",
 		credentialID, userID,
 	)
@@ -116,12 +117,12 @@ func DeleteWebAuthnCredential(credentialID []byte, userID int) (bool, error) {
 	return rows > 0, nil
 }
 
-func ListUserWebAuthnCredentials(userID int) ([]WebAuthnCredentialInfo, error) {
+func ListUserWebAuthnCredentials(ctx context.Context, userID int) ([]WebAuthnCredentialInfo, error) {
 	database, err := getDB()
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	rows, err := database.Query(
+	rows, err := database.QueryContext(ctx,
 		"SELECT id, name, created_at, last_used_at FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at DESC",
 		userID,
 	)

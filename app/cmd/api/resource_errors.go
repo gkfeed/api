@@ -72,6 +72,8 @@ func resourceError(status int) (handlers.ResourceError, bool) {
 		code, message = "method_not_allowed", "Method not allowed"
 	case http.StatusInternalServerError:
 		code, message = "internal_error", "Internal Server Error"
+	case http.StatusServiceUnavailable:
+		code, message = "service_unavailable", "Service Unavailable"
 	default:
 		return handlers.ResourceError{}, false
 	}

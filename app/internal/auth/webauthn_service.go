@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -37,8 +38,8 @@ func NewWebAuthnService(cfg config.Config) (*WebAuthnService, error) {
 	return service, nil
 }
 
-func (s *WebAuthnService) BeginRegistration(user models.User, credentialName string) (*protocol.CredentialCreation, error) {
-	credentials, err := db.GetWebAuthnCredentialsByUserID(user.ID)
+func (s *WebAuthnService) BeginRegistration(ctx context.Context, user models.User, credentialName string) (*protocol.CredentialCreation, error) {
+	credentials, err := db.GetWebAuthnCredentialsByUserID(ctx, user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get credentials: %w", err)
 	}
@@ -60,8 +61,8 @@ func (s *WebAuthnService) BeginRegistration(user models.User, credentialName str
 	return creation, nil
 }
 
-func (s *WebAuthnService) FinishRegistration(user models.User, response *protocol.ParsedCredentialCreationData) (*webauthn.Credential, string, error) {
-	credentials, err := db.GetWebAuthnCredentialsByUserID(user.ID)
+func (s *WebAuthnService) FinishRegistration(ctx context.Context, user models.User, response *protocol.ParsedCredentialCreationData) (*webauthn.Credential, string, error) {
+	credentials, err := db.GetWebAuthnCredentialsByUserID(ctx, user.ID)
 	if err != nil {
 		return nil, "", fmt.Errorf("get credentials: %w", err)
 	}
@@ -76,7 +77,7 @@ func (s *WebAuthnService) FinishRegistration(user models.User, response *protoco
 	if err != nil {
 		return nil, "", fmt.Errorf("create credential: %w", err)
 	}
-	if err := db.AddWebAuthnCredential(user.ID, *credential, pendingCeremony.registrationName); err != nil {
+	if err := db.AddWebAuthnCredential(ctx, user.ID, *credential, pendingCeremony.registrationName); err != nil {
 		return nil, "", fmt.Errorf("store credential: %w", err)
 	}
 	return credential, pendingCeremony.registrationName, nil
@@ -91,23 +92,23 @@ func (s *WebAuthnService) BeginLogin() (*protocol.CredentialAssertion, error) {
 	return assertion, nil
 }
 
-func (s *WebAuthnService) FinishLogin(response *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, models.User, error) {
+func (s *WebAuthnService) FinishLogin(ctx context.Context, response *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, models.User, error) {
 	pendingCeremony, ok := s.ceremonies.pop(response.Response.CollectedClientData.Challenge)
 	if !ok {
 		return nil, models.User{}, fmt.Errorf("session not found or expired")
 	}
 
-	userID, err := db.GetWebAuthnUserIDByCredentialID(response.RawID)
+	userID, err := db.GetWebAuthnUserIDByCredentialID(ctx, response.RawID)
 	if err != nil {
 		return nil, models.User{}, fmt.Errorf("credential not found: %w", err)
 	}
 
-	user, err := db.GetUserFromDBByID(userID)
+	user, err := db.GetUserFromDBByID(ctx, userID)
 	if err != nil {
 		return nil, models.User{}, fmt.Errorf("user not found: %w", err)
 	}
 
-	credentials, err := db.GetWebAuthnCredentialsByUserID(user.ID)
+	credentials, err := db.GetWebAuthnCredentialsByUserID(ctx, user.ID)
 	if err != nil {
 		return nil, models.User{}, fmt.Errorf("get credentials: %w", err)
 	}
@@ -127,7 +128,7 @@ func (s *WebAuthnService) FinishLogin(response *protocol.ParsedCredentialAsserti
 		return nil, models.User{}, fmt.Errorf("validate login: %w", err)
 	}
 
-	if err := db.UpdateWebAuthnCredential(*credential); err != nil {
+	if err := db.UpdateWebAuthnCredential(ctx, *credential); err != nil {
 		return nil, models.User{}, fmt.Errorf("update credential: %w", err)
 	}
 

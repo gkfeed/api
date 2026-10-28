@@ -4,7 +4,7 @@ import "net/http"
 
 // ResourceError is the error body for v2 feed reads/deletes and item reads/deletes.
 type ResourceError struct {
-	Error   string `json:"error" validate:"required" enums:"invalid_id,unauthorized,not_found,internal_error,method_not_allowed" example:"not_found"`
+	Error   string `json:"error" validate:"required" enums:"invalid_id,unauthorized,not_found,internal_error,method_not_allowed,service_unavailable" example:"not_found"`
 	Message string `json:"message" validate:"required" example:"Resource not found"`
 }
 
@@ -19,6 +19,7 @@ type ResourceError struct {
 // @Failure      401 {object} ResourceError "unauthorized: missing or invalid credentials"
 // @Failure      405 {object} ResourceError "method_not_allowed: use GET or POST on this path"
 // @Failure      500 {object} ResourceError "internal_error: request failed"
+// @Failure      503 {object} ResourceError "service_unavailable: password verification is busy"
 // @Header       401 {string} WWW-Authenticate "Basic authentication challenge for realm Restricted"
 // @Header       405 {string} Allow "GET, POST"
 // @Router       /api/v2/feeds [get]
@@ -41,6 +42,7 @@ func (h *LibraryHandler) HandleListResourceFeeds(w http.ResponseWriter, r *http.
 // @Failure      404 {object} ResourceError "not_found: item is missing or belongs to another user"
 // @Failure      405 {object} ResourceError "method_not_allowed: use GET or DELETE on this path"
 // @Failure      500 {object} ResourceError "internal_error: request failed"
+// @Failure      503 {object} ResourceError "service_unavailable: password verification is busy"
 // @Header       401 {string} WWW-Authenticate "Basic authentication challenge for realm Restricted"
 // @Header       405 {string} Allow "GET, DELETE"
 // @Router       /api/v2/items/{id} [delete]

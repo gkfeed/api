@@ -13,6 +13,7 @@ import "net/http"
 // @Failure      404 {object} ResourceError "not_found: feed is missing or belongs to another user"
 // @Failure      405 {object} ResourceError "method_not_allowed: use GET or DELETE on this path"
 // @Failure      500 {object} ResourceError "internal_error: request failed"
+// @Failure      503 {object} ResourceError "service_unavailable: password verification is busy"
 // @Header       401 {string} WWW-Authenticate "Basic authentication challenge for realm Restricted"
 // @Header       405 {string} Allow "GET, DELETE"
 // @Security     BasicAuth

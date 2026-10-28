@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -25,6 +26,7 @@ type loginRequest struct {
 // @Failure      400
 // @Failure      401
 // @Failure      500
+// @Failure      503 "Password verification is busy; retry later"
 // @Router       /api/v1/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -38,7 +40,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, authenticated, err := auth.AuthenticatePassword(req.Username, req.Password)
+	user, authenticated, err := auth.AuthenticatePassword(r.Context(), req.Username, req.Password)
+	if errors.Is(err, auth.ErrPasswordVerificationBusy) {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return
@@ -48,7 +55,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.issueTokenPair(user)
+	tokens, err := h.issueTokenPair(r.Context(), user)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("create authentication session: %w", err))
 		return
@@ -90,13 +97,13 @@ func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	credential, user, err := h.webAuthnService.FinishLogin(parsedResponse)
+	credential, user, err := h.webAuthnService.FinishLogin(r.Context(), parsedResponse)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("finish login: %w", err))
 		return
 	}
 
-	tokens, err := h.issueTokenPair(user)
+	tokens, err := h.issueTokenPair(r.Context(), user)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("create authentication session: %w", err))
 		return
