@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"gkfeed/api/internal/auth"
-
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -38,7 +36,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, authenticated, err := auth.AuthenticatePassword(req.Username, req.Password)
+	user, authenticated, err := h.passwords.AuthenticatePassword(r.Context(), req.Username, req.Password)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return
@@ -48,7 +46,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.issueTokenPair(user)
+	tokens, err := h.issueTokenPair(r.Context(), user)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("create authentication session: %w", err))
 		return
@@ -90,13 +88,13 @@ func (h *AuthHandler) FinishLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	credential, user, err := h.webAuthnService.FinishLogin(parsedResponse)
+	credential, user, err := h.webAuthnService.FinishLogin(r.Context(), parsedResponse)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("finish login: %w", err))
 		return
 	}
 
-	tokens, err := h.issueTokenPair(user)
+	tokens, err := h.issueTokenPair(r.Context(), user)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("create authentication session: %w", err))
 		return

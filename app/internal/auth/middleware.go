@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func Authenticate(sessions *SessionStore) func(http.HandlerFunc) http.HandlerFunc {
+func (a *PasswordAuthenticator) Authenticate(sessions *SessionStore) func(http.HandlerFunc) http.HandlerFunc {
 	return func(handler http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if sessions != nil {
@@ -19,7 +19,7 @@ func Authenticate(sessions *SessionStore) func(http.HandlerFunc) http.HandlerFun
 
 			username, password, ok := r.BasicAuth()
 			if ok {
-				user, authenticated, err := authenticateWithDB(username, password)
+				user, authenticated, err := a.AuthenticatePassword(r.Context(), username, password)
 				if err != nil {
 					log.Printf("auth: basic auth error for user=%q: %v", username, err)
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

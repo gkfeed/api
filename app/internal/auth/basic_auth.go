@@ -5,11 +5,11 @@ import (
 	"net/http"
 )
 
-func BasicAuth(handler http.HandlerFunc) http.HandlerFunc {
+func (a *PasswordAuthenticator) BasicAuth(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		if ok {
-			user, authenticated, err := authenticateWithDB(username, password)
+			user, authenticated, err := a.AuthenticatePassword(r.Context(), username, password)
 			if err != nil {
 				log.Printf("authentication failed: %v", err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

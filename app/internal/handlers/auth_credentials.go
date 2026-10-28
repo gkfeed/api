@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"gkfeed/api/internal/db"
-
 	"github.com/gorilla/mux"
 )
 
@@ -26,7 +24,7 @@ func (h *AuthHandler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	infos, err := db.ListUserWebAuthnCredentials(user.ID)
+	infos, err := h.credentials.ListUserWebAuthnCredentials(r.Context(), user.ID)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("list credentials: %w", err))
 		return
@@ -76,7 +74,7 @@ func (h *AuthHandler) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted, err := db.DeleteWebAuthnCredential(credentialID, user.ID)
+	deleted, err := h.credentials.DeleteWebAuthnCredential(r.Context(), credentialID, user.ID)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("delete credential: %w", err))
 		return
