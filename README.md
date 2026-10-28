@@ -270,6 +270,24 @@ changes data. Authenticated requests receive a JSON `410 Gone` response pointing
 clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive
 `401 Unauthorized`.
 
+### Item list summaries
+
+`GET /api/v2/items?view=summary&limit=100` returns the usual `items` and optional
+`next_cursor`, with `id`, `feed_id`, `title`, `date`, and `link` for each item.
+The `text` field is absent, and the database query does not select item text,
+including the lookahead row. Follow `next_cursor` until it is absent, then fetch
+the selected full item with `GET /api/v2/items/{id}` when needed.
+
+The same opt-in view is available on `/api/v1/get_items`; its detail route is
+`/api/v1/item?id=<id>`. Omitting `view` or passing `view=full` preserves the
+existing full-text response. Unsupported, empty, or repeated `view` values
+return `400`. Ownership filtering, descending ID ordering, limits, and cursor
+semantics are shared by both views. Empty pages return `{"items":[]}`.
+
+Clients must opt in and distinguish summaries from full items. This reduces
+full-text transfer and retention for lists; it does not impose a response byte
+budget or change the sync, changes, RSS, or single-item routes.
+
 ### Item synchronization
 
 `GET /api/v2/items/sync?limit=100` returns `items`, `next_cursor`, `has_more`, and

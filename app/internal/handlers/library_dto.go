@@ -29,6 +29,22 @@ type itemDTO struct {
 	Link   string    `json:"link"`
 }
 
+type itemSummaryDTO struct {
+	ID     int       `json:"id"`
+	FeedID int       `json:"feed_id"`
+	Title  string    `json:"title"`
+	Date   time.Time `json:"date"`
+	Link   string    `json:"link"`
+}
+
+func itemSummaryDTOs(items []library.ItemSummary) []itemSummaryDTO {
+	result := make([]itemSummaryDTO, 0, len(items))
+	for _, item := range items {
+		result = append(result, itemSummaryDTO{ID: item.ID, FeedID: item.FeedID, Title: item.Title, Date: item.Date, Link: item.Link})
+	}
+	return result
+}
+
 func toFeedDTO(feed library.Feed) feedDTO {
 	return feedDTO{ID: feed.ID, Title: feed.Title, Type: string(feed.Type), URL: feed.URL, UserID: feed.UserID}
 }
