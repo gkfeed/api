@@ -334,10 +334,14 @@ Provision a disposable PostgreSQL 17 database with infra's pinned
 GKFEED_TEST_DATABASE_URL='<disposable operator connection URL>' make check
 ```
 
-This opt-in suite truncates users and dependent application data. Never point
-it at a shared or production database. The operator connection seeds fixtures;
-repository and auth operations use `SET ROLE gkfeed_api` through pgx connection
-parameters. Tests cover concurrent feed creation across multiple connections,
+Every `postgresFixture` call truncates `users`, its dependent application data,
+and the independent `item_changes` history with `RESTART IDENTITY`. It then
+seeds users 1 and 2. Never point this opt-in suite at a shared or production
+database. Fixture calls must run serially; do not use `t.Parallel` or share the
+database between test processes. The operator connection resets and seeds
+fixtures; repository and auth operations use `SET ROLE gkfeed_api` through pgx
+connection parameters. Tests cover fixture recreation without change-history
+leaks, concurrent feed creation across multiple connections,
 nullable passwords, WebAuthn lookups, refresh tokens, and application grants.
 Without this variable, `make check` runs local fixtures and skips PostgreSQL
 integration tests.
