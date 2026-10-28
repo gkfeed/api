@@ -265,6 +265,24 @@ for response details, the PostgreSQL prerequisite, and deferred frontend/dev-pro
 
 Refresh token IDs in the infra-owned `refresh_tokens` table contain only SHA-256 token digests and random family IDs. Consumed tokens remain as expired rows so reuse can be detected. Each refresh rotates the token; reusing an old token revokes the entire token family and its access sessions. Access sessions are held in memory, so restarting the API invalidates access tokens while valid refresh tokens can obtain new ones.
 
+### Passkey HTTP contract
+
+Registration begin and all passkey finish requests have a 1 MiB body limit,
+including trailing whitespace. Malformed JSON, extra JSON values and oversized
+bodies return `400`. `POST /api/v1/auth/register/begin` accepts an optional
+`{"name":"work laptop"}` object; an empty or whitespace-only body still starts
+registration with an empty name. Unknown fields are ignored as before.
+
+Invalid assertions, unknown credentials, missing/expired challenges and replay
+return `401` on both v1 and browser login finish routes. Registration validation
+failures return `400`. Storage failures return a generic `500`. These errors
+retain their plain-text format.
+
+V1 passkey login keeps its `200` token pair with `credential_id`; browser login
+keeps `201` with `{id, name}` and a session cookie. Registration finish keeps
+`200` with `{id, name}` for the credential. V1 auth and v2 browser-session
+responses use `Cache-Control: no-store`, including handled errors.
+
 The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing
 clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive

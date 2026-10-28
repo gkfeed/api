@@ -16,7 +16,10 @@ in browser login JSON. Password and passkey login return only `{id, name}`.
 session. It does not accept Basic or Bearer authentication. Invalid credentials
 return `401`; malformed login JSON returns `400`. Passkey endpoints return `503`
 when WebAuthn is not configured. Reusing a completed passkey challenge returns
-`401`. Responses use `Cache-Control: no-store`.
+`401`. Invalid assertions and unknown credentials also return `401`; credential
+storage and session-creation failures return a generic `500`. Passkey finish
+accepts at most 1 MiB, including trailing whitespace; oversized or malformed
+bodies return `400`. Responses use `Cache-Control: no-store`.
 
 ## Cookie and expiry
 
