@@ -95,8 +95,10 @@ docker compose up --build -d
 
 Docker Compose requires `GKFEED_DATABASE_URL` for an externally provisioned
 PostgreSQL database. It does not start a database or run migrations.
-The deployment workflow runs tests on pushes to `master`, but deployment
-requires a manual run with `cutover_ready` confirmed. Confirm that the infra
+`api-contract.yml` runs the general checks and build for `v1`. The deployment
+workflow adds PostgreSQL 17 contracts against a disposable service. Deployment
+requires a manual run with `cutover_ready` confirmed, PostgreSQL contracts and
+`make check` passing. Confirm that the infra
 schema, grants, importer, sequence synchronization, and cutover checks are
 complete before selecting that input.
 
@@ -334,10 +336,31 @@ Provision a disposable PostgreSQL 17 database with infra's pinned
 GKFEED_TEST_DATABASE_URL='<disposable operator connection URL>' make check
 ```
 
-This opt-in suite truncates users and dependent application data. Never point
-it at a shared or production database. The operator connection seeds fixtures;
-repository and auth operations use `SET ROLE gkfeed_api` through pgx connection
-parameters. Tests cover concurrent feed creation across multiple connections,
+Every `postgresFixture` call truncates `users`, its dependent application data,
+and the independent `item_changes` history with `RESTART IDENTITY`. It then
+seeds users 1 and 2. Never point this opt-in suite at a shared or production
+database. Fixture calls must run serially; do not use `t.Parallel` or share the
+database between test processes. The operator connection resets and seeds
+fixtures; repository and auth operations use `SET ROLE gkfeed_api` through pgx
+connection parameters. Tests cover fixture recreation without change-history
+leaks, concurrent feed creation across multiple connections,
 nullable passwords, WebAuthn lookups, refresh tokens, and application grants.
 Without this variable, `make check` runs local fixtures and skips PostgreSQL
 integration tests.
+
+CI checks out merged infra revision
+[`76b69007f77e2cea64113b90bd74219128958209`](https://github.com/gkfeed/infra/commit/76b69007f77e2cea64113b90bd74219128958209).
+It includes prerequisite `20261012101552_add_browser_sessions`. CI uses infra's
+`make migrate status` and pinned dbmate `2.35.1` with a read-only mount and
+schema dumping disabled. The disposable service uses a random host port and
+no repository secrets. The API and deployment do not execute DDL.
+
+Sync tests cover snapshot consistency, page ceilings, changes, feed cascades,
+user isolation and concurrent commit order. Run the PostgreSQL contracts with:
+
+```sh
+make swagger
+cd app
+GKFEED_TEST_DATABASE_URL='<disposable operator connection URL>' \
+  go test ./internal/storage/postgres -run '^TestPostgres' -count=1 -timeout 120s
+```

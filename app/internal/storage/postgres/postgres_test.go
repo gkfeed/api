@@ -15,12 +15,14 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"gkfeed/api/internal/auth"
 	"gkfeed/api/internal/db"
+	"gkfeed/api/internal/library"
 	"gkfeed/api/internal/passwordhash"
 	"gkfeed/api/internal/storage/repositorytest"
 )
 
 // This opt-in suite truncates application data. Use only a disposable database
-// provisioned by infra's pinned dbmate migrations.
+// provisioned by infra's pinned dbmate migrations. Calls must be serialized;
+// each fixture resets application data, including independent change history.
 func postgresFixture(t *testing.T) (*sql.DB, *sql.DB) {
 	t.Helper()
 	url := os.Getenv("GKFEED_TEST_DATABASE_URL")
@@ -35,7 +37,8 @@ func postgresFixture(t *testing.T) (*sql.DB, *sql.DB) {
 	if err := CheckSchema(t.Context(), admin); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := admin.Exec("TRUNCATE public.users RESTART IDENTITY CASCADE"); err != nil {
+	// item_changes has no foreign key to users, so CASCADE cannot clear it.
+	if _, err := admin.Exec("TRUNCATE public.users, public.item_changes RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := admin.Exec("INSERT INTO public.users (id, name) VALUES (1, 'owner'), (2, 'other')"); err != nil {
@@ -53,6 +56,40 @@ func postgresFixture(t *testing.T) (*sql.DB, *sql.DB) {
 		t.Fatal(err)
 	}
 	return admin, app
+}
+
+func TestPostgresFixtureIsolation(t *testing.T) {
+	admin, app := postgresFixture(t)
+	feed, err := NewFeedRepository(app).Add(t.Context(), 1, library.CreateFeedInput{
+		Title: "fixture", Type: "rss", URL: "https://fixture.example/feed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var itemID int
+	if err := admin.QueryRow("INSERT INTO public.item (feed_id,title,text,date,link) VALUES ($1,'previous','','2026-01-01','') RETURNING id", feed.ID).Scan(&itemID); err != nil {
+		t.Fatal(err)
+	}
+	items := NewItemRepository(app)
+	if err := items.Delete(t.Context(), 1, itemID); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := items.Changes(t.Context(), 1, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes.Changes) != 2 {
+		t.Fatalf("expected an upsert and tombstone before reset, got %#v", changes)
+	}
+
+	_, app = postgresFixture(t)
+	changes, err = NewItemRepository(app).Changes(t.Context(), 1, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes.Changes) != 0 {
+		t.Fatalf("fixture retained item changes: %#v", changes)
+	}
 }
 
 func TestPostgresRepositoryContract(t *testing.T) {
