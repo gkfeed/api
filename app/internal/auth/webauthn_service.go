@@ -25,6 +25,10 @@ func NewWebAuthnService(cfg config.Config) (*WebAuthnService, error) {
 		RPDisplayName: cfg.WebAuthnRPDisplay,
 		RPID:          cfg.WebAuthnRPID,
 		RPOrigins:     []string{cfg.WebAuthnRPOrigin},
+		Timeouts: webauthn.TimeoutsConfig{
+			Login:        webauthn.TimeoutConfig{Enforce: true},
+			Registration: webauthn.TimeoutConfig{Enforce: true},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create webauthn: %w", err)

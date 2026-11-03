@@ -18,6 +18,13 @@ return `401`; malformed login JSON returns `400`. Passkey endpoints return `503`
 when WebAuthn is not configured. Reusing a completed passkey challenge returns
 `401`. Responses use `Cache-Control: no-store`.
 
+## Passkey ceremonies
+
+Passkey login and registration challenges expire after five minutes on the
+server, matching the WebAuthn options. A challenge can be consumed only once.
+Expired challenges are removed on the next begin or finish request. Challenges
+are local to the API process, so a restart requires a new begin request.
+
 ## Cookie and expiry
 
 The API sets `gkfeed.session` with `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`,
