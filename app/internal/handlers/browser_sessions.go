@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -125,7 +126,11 @@ func (h *AuthHandler) FinishBrowserLogin(w http.ResponseWriter, r *http.Request)
 	}
 	_, user, err := h.webAuthnService.FinishLogin(parsed)
 	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if errors.Is(err, auth.ErrInvalidWebAuthnCeremony) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		writeInternalServerError(w, fmt.Errorf("finish browser login: %w", err))
 		return
 	}
 	h.issueBrowserSession(w, r, user)

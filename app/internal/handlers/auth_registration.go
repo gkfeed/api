@@ -3,8 +3,12 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+
+	"gkfeed/api/internal/auth"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -22,6 +26,7 @@ type registerBeginRequest struct {
 // @Security     BasicAuth
 // @Security     BearerAuth
 // @Success      200
+// @Failure      400
 // @Failure      401
 // @Failure      500
 // @Router       /api/v1/auth/register/begin [post]
@@ -32,7 +37,18 @@ func (h *AuthHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req registerBeginRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		// The registration name is optional, including an empty request body.
+		if !errors.Is(err, io.EOF) {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	} else if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		http.Error(w, "Request body must contain one JSON object", http.StatusBadRequest)
+		return
+	}
 
 	creation, err := h.webAuthnService.BeginRegistration(user, req.Name)
 	if err != nil {
@@ -62,6 +78,7 @@ func (h *AuthHandler) FinishRegistration(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(r.Body)
 	if err != nil {
 		http.Error(w, "Invalid credential creation response", http.StatusBadRequest)
@@ -70,6 +87,10 @@ func (h *AuthHandler) FinishRegistration(w http.ResponseWriter, r *http.Request)
 
 	credential, name, err := h.webAuthnService.FinishRegistration(user, parsedResponse)
 	if err != nil {
+		if errors.Is(err, auth.ErrInvalidWebAuthnCeremony) {
+			http.Error(w, "Invalid credential creation response", http.StatusBadRequest)
+			return
+		}
 		writeInternalServerError(w, fmt.Errorf("finish registration: %w", err))
 		return
 	}

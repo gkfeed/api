@@ -171,6 +171,12 @@ func newHandler(configuration config.Config, provided ...*handlers.LibraryHandle
 	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleDeleteResourceItem)).Methods(http.MethodDelete)
 
 	authRouter := api.PathPrefix("/auth").Subrouter()
+	authRouter.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			next.ServeHTTP(w, r)
+		})
+	})
 	authRouter.HandleFunc("/me", authenticate(handlers.HandleMe)).Methods(http.MethodGet)
 
 	authHandler := handlers.NewAuthHandlerWithSessions(configuration, nil, sessions)
