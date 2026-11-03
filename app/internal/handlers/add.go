@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"gkfeed/api/internal/library"
 )
@@ -27,6 +28,13 @@ func (h *LibraryHandler) HandleAddFeed(w http.ResponseWriter, r *http.Request) {
 
 	var feedInput createFeedDTO
 	if !decodeJSON(w, r, &feedInput) {
+		return
+	}
+	feedInput.Title = strings.TrimSpace(feedInput.Title)
+	feedInput.Type = strings.TrimSpace(feedInput.Type)
+	feedInput.URL = strings.TrimSpace(feedInput.URL)
+	if feedInput.Title == "" || feedInput.Type == "" || feedInput.URL == "" {
+		http.Error(w, "title, type and url are required", http.StatusBadRequest)
 		return
 	}
 
