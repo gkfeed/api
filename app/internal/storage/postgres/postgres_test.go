@@ -77,13 +77,22 @@ func TestPostgresRepositoryContract(t *testing.T) {
 
 func TestPostgresAuthContract(t *testing.T) {
 	admin, app := postgresFixture(t)
-	db.Configure(app)
-	t.Cleanup(func() { db.Configure(nil) })
-	byName, err := db.GetUserFromDB("owner")
+	users := db.NewUserRepository(app)
+	credentialRepo := db.NewCredentialRepository(app)
+	refreshTokens := db.NewRefreshTokenRepository(app)
+
+	var canUpdateRefreshTokens bool
+	if err := app.QueryRowContext(t.Context(), "SELECT has_table_privilege(current_user, 'public.refresh_tokens', 'UPDATE')").Scan(&canUpdateRefreshTokens); err != nil {
+		t.Fatal(err)
+	}
+	if canUpdateRefreshTokens {
+		t.Fatal("auth contract must work without UPDATE on refresh_tokens")
+	}
+	byName, err := users.GetUserFromDB(t.Context(), "owner")
 	if err != nil {
 		t.Fatal(err)
 	}
-	byID, err := db.GetUserFromDBByID(1)
+	byID, err := users.GetUserFromDBByID(t.Context(), 1)
 	if err != nil || byName != byID || byID.HashedPassword.Valid {
 		t.Fatalf("user = %#v, %v", byID, err)
 	}
@@ -91,7 +100,7 @@ func TestPostgresAuthContract(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "/", nil)
 		request.SetBasicAuth("owner", password)
 		response := httptest.NewRecorder()
-		auth.BasicAuth(func(http.ResponseWriter, *http.Request) { t.Error("accepted null password") })(response, request)
+		auth.NewPasswordAuthenticator(db.NewUserRepository(app)).BasicAuth(func(http.ResponseWriter, *http.Request) { t.Error("accepted null password") })(response, request)
 		if response.Code != 401 {
 			t.Fatalf("status = %d", response.Code)
 		}
@@ -103,45 +112,45 @@ func TestPostgresAuthContract(t *testing.T) {
 	if _, err := admin.Exec("UPDATE users SET hashed_password=$1 WHERE id=2", hash); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := auth.AuthenticatePassword("other", "secret"); err != nil || !ok {
+	if _, ok, err := auth.NewPasswordAuthenticator(db.NewUserRepository(app)).AuthenticatePassword(t.Context(), "other", "secret"); err != nil || !ok {
 		t.Fatalf("login = %v, %v", ok, err)
 	}
 	credential := webauthn.Credential{ID: []byte("passkey")}
-	if err := db.AddWebAuthnCredential(1, credential, "key"); err != nil {
+	if err := credentialRepo.AddWebAuthnCredential(t.Context(), 1, credential, "key"); err != nil {
 		t.Fatal(err)
 	}
-	id, err := db.GetWebAuthnUserIDByCredentialID(credential.ID)
+	id, err := credentialRepo.GetWebAuthnUserIDByCredentialID(t.Context(), credential.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := db.GetUserFromDBByID(id)
+	user, err := users.GetUserFromDBByID(t.Context(), id)
 	if err != nil || user.ID != 1 || user.HashedPassword.Valid {
 		t.Fatalf("passkey user = %#v, %v", user, err)
 	}
-	if err := db.UpdateWebAuthnCredential(credential); err != nil {
+	if err := credentialRepo.UpdateWebAuthnCredential(t.Context(), credential); err != nil {
 		t.Fatal(err)
 	}
-	credentials, err := db.GetWebAuthnCredentialsByUserID(1)
+	credentials, err := credentialRepo.GetWebAuthnCredentialsByUserID(t.Context(), 1)
 	if err != nil || len(credentials) != 1 {
 		t.Fatalf("credentials = %#v, %v", credentials, err)
 	}
-	infos, err := db.ListUserWebAuthnCredentials(1)
+	infos, err := credentialRepo.ListUserWebAuthnCredentials(t.Context(), 1)
 	if err != nil || len(infos) != 1 {
 		t.Fatalf("credential infos = %#v, %v", infos, err)
 	}
 	tokenHash := []byte("test-token-digest")
 	family := []byte("test-family")
-	if err := db.CreateAuthRefreshToken(1, tokenHash, family, time.Now().Add(time.Hour)); err != nil {
+	if err := refreshTokens.CreateAuthRefreshToken(t.Context(), 1, tokenHash, family, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	rotation, err := db.RotateAuthRefreshToken(tokenHash, []byte("next-token-digest"), time.Now(), time.Now().Add(time.Hour))
+	rotation, err := refreshTokens.RotateAuthRefreshToken(t.Context(), tokenHash, []byte("next-token-digest"), time.Now(), time.Now().Add(time.Hour))
 	if err != nil || rotation.User.ID != 1 {
 		t.Fatalf("rotation = %#v, %v", rotation, err)
 	}
-	if _, err := db.RevokeAuthRefreshToken([]byte("next-token-digest"), time.Now()); err != nil {
+	if _, err := refreshTokens.RevokeAuthRefreshToken(t.Context(), []byte("next-token-digest"), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := db.DeleteWebAuthnCredential(credential.ID, 1); err != nil || !ok {
+	if ok, err := credentialRepo.DeleteWebAuthnCredential(t.Context(), credential.ID, 1); err != nil || !ok {
 		t.Fatalf("delete credential = %v, %v", ok, err)
 	}
 	// The application role must not acquire schema ownership.
@@ -152,34 +161,34 @@ func TestPostgresAuthContract(t *testing.T) {
 
 func TestPostgresBrowserSessionContract(t *testing.T) {
 	_, app := postgresFixture(t)
-	db.Configure(app)
-	t.Cleanup(func() { db.Configure(nil) })
-	if err := db.CheckBrowserSessionSchema(t.Context()); err != nil {
+	browserSessions := db.NewBrowserSessionRepository(app)
+
+	if err := browserSessions.CheckBrowserSessionSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
 	hash := auth.DigestToken("browser-contract-session")
 	expiry := now.Add(auth.BrowserSessionMaxTTL)
-	if err := db.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
+	if err := browserSessions.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
 		t.Fatal(err)
 	}
-	user, actualExpiry, err := db.TouchBrowserSession(t.Context(), hash, now.Add(time.Hour), auth.BrowserSessionIdleTTL)
+	user, actualExpiry, err := browserSessions.TouchBrowserSession(t.Context(), hash, now.Add(time.Hour), auth.BrowserSessionIdleTTL)
 	if err != nil || user.ID != 1 || !actualExpiry.Truncate(time.Microsecond).Equal(expiry.Truncate(time.Microsecond)) {
 		t.Fatalf("browser session = %#v, %v, %v", user, actualExpiry, err)
 	}
-	if err := db.DeleteBrowserSession(t.Context(), hash); err != nil {
+	if err := browserSessions.DeleteBrowserSession(t.Context(), hash); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := db.TouchBrowserSession(t.Context(), hash, now.Add(2*time.Hour), auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
+	if _, _, err := browserSessions.TouchBrowserSession(t.Context(), hash, now.Add(2*time.Hour), auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
 		t.Fatalf("deleted browser session = %v", err)
 	}
-	if err := db.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
+	if err := browserSessions.CreateBrowserSession(t.Context(), hash, 1, now, expiry); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.DeleteUserBrowserSessions(t.Context(), 1); err != nil {
+	if err := browserSessions.DeleteUserBrowserSessions(t.Context(), 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := db.TouchBrowserSession(t.Context(), hash, now, auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
+	if _, _, err := browserSessions.TouchBrowserSession(t.Context(), hash, now, auth.BrowserSessionIdleTTL); !errors.Is(err, db.ErrInvalidBrowserSession) {
 		t.Fatalf("logout-all browser session = %v", err)
 	}
 }

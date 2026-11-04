@@ -10,7 +10,7 @@ import (
 )
 
 func TestSwaggerResourceErrorScope(t *testing.T) {
-	response := resourceRequest(newHandler(config.Config{}), http.MethodGet, "/api/swagger/doc.json", "")
+	response := resourceRequest(newHandler(config.Config{}, nil), http.MethodGet, "/api/swagger/doc.json", "")
 	var document struct {
 		Paths map[string]map[string]struct {
 			Parameters []struct {

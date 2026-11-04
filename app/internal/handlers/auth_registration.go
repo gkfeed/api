@@ -34,7 +34,7 @@ func (h *AuthHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) 
 	var req registerBeginRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	creation, err := h.webAuthnService.BeginRegistration(user, req.Name)
+	creation, err := h.webAuthnService.BeginRegistration(r.Context(), user, req.Name)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("begin registration: %w", err))
 		return
@@ -68,7 +68,7 @@ func (h *AuthHandler) FinishRegistration(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	credential, name, err := h.webAuthnService.FinishRegistration(user, parsedResponse)
+	credential, name, err := h.webAuthnService.FinishRegistration(r.Context(), user, parsedResponse)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("finish registration: %w", err))
 		return

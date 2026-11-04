@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"log"
@@ -17,13 +18,14 @@ import (
 )
 
 func TestBasicAuthProvidesAuthenticatedUser(t *testing.T) {
+	t.Parallel()
 	hash := testPasswordHash(t, "secret")
-	replaceUserLookup(t, func(name string) (models.User, error) {
+	passwords := testPasswordAuthenticator(func(name string) (models.User, error) {
 		return models.User{ID: 7, Name: name, HashedPassword: sql.NullString{String: hash, Valid: true}}, nil
 	})
 
 	var receivedUser models.User
-	handler := BasicAuth(func(w http.ResponseWriter, r *http.Request) {
+	handler := passwords.BasicAuth(func(w http.ResponseWriter, r *http.Request) {
 		receivedUser, _ = UserFromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -42,12 +44,13 @@ func TestBasicAuthProvidesAuthenticatedUser(t *testing.T) {
 }
 
 func TestBasicAuthRejectsInvalidPassword(t *testing.T) {
+	t.Parallel()
 	hash := testPasswordHash(t, "secret")
-	replaceUserLookup(t, func(name string) (models.User, error) {
+	passwords := testPasswordAuthenticator(func(name string) (models.User, error) {
 		return models.User{Name: name, HashedPassword: sql.NullString{String: hash, Valid: true}}, nil
 	})
 
-	handler := BasicAuth(func(http.ResponseWriter, *http.Request) {
+	handler := passwords.BasicAuth(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("protected handler was called")
 	})
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -62,11 +65,12 @@ func TestBasicAuthRejectsInvalidPassword(t *testing.T) {
 }
 
 func TestBasicAuthReturnsServerErrorWhenLookupFails(t *testing.T) {
-	replaceUserLookup(t, func(string) (models.User, error) {
+	t.Parallel()
+	passwords := testPasswordAuthenticator(func(string) (models.User, error) {
 		return models.User{}, errors.New("database unavailable")
 	})
 
-	handler := BasicAuth(func(http.ResponseWriter, *http.Request) {
+	handler := passwords.BasicAuth(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("protected handler was called")
 	})
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -81,13 +85,14 @@ func TestBasicAuthReturnsServerErrorWhenLookupFails(t *testing.T) {
 }
 
 func TestAuthenticateFallsBackToBasicAuth(t *testing.T) {
+	t.Parallel()
 	hash := testPasswordHash(t, "secret")
-	replaceUserLookup(t, func(name string) (models.User, error) {
+	passwords := testPasswordAuthenticator(func(name string) (models.User, error) {
 		return models.User{ID: 99, Name: name, HashedPassword: sql.NullString{String: hash, Valid: true}}, nil
 	})
 
 	var receivedUser models.User
-	handler := Authenticate(nil)(func(w http.ResponseWriter, r *http.Request) {
+	handler := passwords.Authenticate(nil)(func(w http.ResponseWriter, r *http.Request) {
 		receivedUser, _ = UserFromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -107,7 +112,8 @@ func TestAuthenticateFallsBackToBasicAuth(t *testing.T) {
 }
 
 func TestAuthenticateRejectsWithoutCredentials(t *testing.T) {
-	handler := Authenticate(nil)(func(http.ResponseWriter, *http.Request) {
+	t.Parallel()
+	handler := NewPasswordAuthenticator(nil).Authenticate(nil)(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("protected handler was called")
 	})
 
@@ -122,7 +128,8 @@ func TestAuthenticateRejectsWithoutCredentials(t *testing.T) {
 }
 
 func TestAuthenticateAdvertisesBearerAndBasicAuth(t *testing.T) {
-	handler := Authenticate(NewSessionStore(time.Minute))(func(http.ResponseWriter, *http.Request) {
+	t.Parallel()
+	handler := NewPasswordAuthenticator(nil).Authenticate(NewSessionStore(time.Minute))(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("protected handler was called")
 	})
 
@@ -136,6 +143,7 @@ func TestAuthenticateAdvertisesBearerAndBasicAuth(t *testing.T) {
 }
 
 func TestParseBearerToken(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		header string
 		token  string
@@ -157,7 +165,7 @@ func TestParseBearerToken(t *testing.T) {
 }
 
 func TestAuthenticateDoesNotLogAuthorizationHeader(t *testing.T) {
-	replaceUserLookup(t, func(name string) (models.User, error) {
+	passwords := testPasswordAuthenticator(func(name string) (models.User, error) {
 		return models.User{Name: name, HashedPassword: sql.NullString{String: "secret", Valid: true}}, nil
 	})
 
@@ -168,7 +176,7 @@ func TestAuthenticateDoesNotLogAuthorizationHeader(t *testing.T) {
 		log.SetOutput(previousOutput)
 	})
 
-	handler := Authenticate(nil)(func(http.ResponseWriter, *http.Request) {
+	handler := passwords.Authenticate(nil)(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("protected handler was called")
 	})
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -190,11 +198,14 @@ func TestAuthenticateDoesNotLogAuthorizationHeader(t *testing.T) {
 	}
 }
 
-func replaceUserLookup(t *testing.T, lookup func(string) (models.User, error)) {
-	t.Helper()
-	original := getUser
-	getUser = lookup
-	t.Cleanup(func() { getUser = original })
+func testPasswordAuthenticator(lookup func(string) (models.User, error)) *PasswordAuthenticator {
+	return NewPasswordAuthenticator(userLookupFunc(func(_ context.Context, name string) (models.User, error) { return lookup(name) }))
+}
+
+type userLookupFunc func(context.Context, string) (models.User, error)
+
+func (f userLookupFunc) GetUserFromDB(ctx context.Context, name string) (models.User, error) {
+	return f(ctx, name)
 }
 
 func testPasswordHash(t *testing.T, password string) string {
@@ -207,14 +218,15 @@ func testPasswordHash(t *testing.T, password string) string {
 }
 
 func TestBasicAuthRejectsNullPassword(t *testing.T) {
-	replaceUserLookup(t, func(name string) (models.User, error) {
+	t.Parallel()
+	passwords := testPasswordAuthenticator(func(name string) (models.User, error) {
 		return models.User{ID: 7, Name: name}, nil
 	})
 	for _, password := range []string{"", "secret"} {
 		request := httptest.NewRequest(http.MethodGet, "/", nil)
 		request.SetBasicAuth("passwordless", password)
 		response := httptest.NewRecorder()
-		BasicAuth(func(http.ResponseWriter, *http.Request) { t.Error("authenticated passwordless user") })(response, request)
+		passwords.BasicAuth(func(http.ResponseWriter, *http.Request) { t.Error("authenticated passwordless user") })(response, request)
 		if response.Code != http.StatusUnauthorized {
 			t.Fatalf("status = %d", response.Code)
 		}

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -8,13 +9,16 @@ import (
 	"gkfeed/api/internal/models"
 )
 
-func GetUserFromDB(name string) (models.User, error) {
-	database, err := getDB()
-	if err != nil {
-		return models.User{}, fmt.Errorf("open database: %w", err)
-	}
+// UserRepository borrows the pool owned by the composition root.
+type UserRepository struct{ database *sql.DB }
+
+func NewUserRepository(database *sql.DB) *UserRepository {
+	return &UserRepository{database: database}
+}
+
+func (r *UserRepository) GetUserFromDB(ctx context.Context, name string) (models.User, error) {
 	var user models.User
-	err = database.QueryRow(
+	err := r.database.QueryRowContext(ctx,
 		"SELECT id, name, hashed_password FROM users WHERE name = $1",
 		name,
 	).Scan(&user.ID, &user.Name, &user.HashedPassword)
@@ -28,13 +32,9 @@ func GetUserFromDB(name string) (models.User, error) {
 	return user, nil
 }
 
-func GetUserFromDBByID(id int) (models.User, error) {
-	database, err := getDB()
-	if err != nil {
-		return models.User{}, fmt.Errorf("open database: %w", err)
-	}
+func (r *UserRepository) GetUserFromDBByID(ctx context.Context, id int) (models.User, error) {
 	var user models.User
-	err = database.QueryRow(
+	err := r.database.QueryRowContext(ctx,
 		"SELECT id, name, hashed_password FROM users WHERE id = $1",
 		id,
 	).Scan(&user.ID, &user.Name, &user.HashedPassword)

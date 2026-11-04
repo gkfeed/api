@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"gkfeed/api/internal/config"
-	"gkfeed/api/internal/db"
 	"gkfeed/api/internal/testschema"
 )
 
@@ -20,9 +19,8 @@ func resourceTestDatabase(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.Configure(database)
+
 	t.Cleanup(func() {
-		db.Configure(nil)
 		database.Close()
 	})
 	testschema.Init(t, database)
@@ -49,8 +47,8 @@ func resourceTestDatabase(t *testing.T) *sql.DB {
 }
 
 func TestV2ResourceRoutesAndV1Compatibility(t *testing.T) {
-	resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	database := resourceTestDatabase(t)
+	handler := newHandler(config.Config{}, database)
 	call := func(method, path, username, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(method, path, strings.NewReader(body))

@@ -34,8 +34,8 @@ func browserFixture(t *testing.T) (*sql.DB, config.Config) {
 		t.Fatal(err)
 	}
 	database.SetMaxOpenConns(1)
-	db.Configure(database)
-	t.Cleanup(func() { db.Configure(nil); database.Close() })
+
+	t.Cleanup(func() { database.Close() })
 	testschema.Init(t, database)
 	if _, err := database.Exec("INSERT INTO users (id,name,hashed_password) VALUES (1,'reader',$1)", testHash(t, "secret")); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func browserLoginCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie
 
 func TestBrowserSessionLifecycle(t *testing.T) {
 	database, cfg := browserFixture(t)
-	handler := newHandler(cfg)
+	handler := newHandler(cfg, database)
 	first := browserLogin(t, handler)
 	second := browserLogin(t, handler)
 	var storedHash []byte
@@ -101,7 +101,7 @@ func TestBrowserSessionLifecycle(t *testing.T) {
 		t.Fatal("raw session token stored")
 	}
 	// Rebuilding the handler replaces in-memory stores while the database stays.
-	handler = newHandler(cfg)
+	handler = newHandler(cfg, database)
 	for _, path := range []string{"/api/v2/me", "/api/v1/list", "/api/v1/auth/me", "/api/v2/feeds", "/api/v2/items", "/api/v2/items/sync"} {
 		w := browserRequest(handler, http.MethodGet, path, "", "", first)
 		if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
@@ -138,8 +138,8 @@ func TestBrowserSessionLifecycle(t *testing.T) {
 }
 
 func TestBrowserSessionOriginProtection(t *testing.T) {
-	_, cfg := browserFixture(t)
-	handler := newHandler(cfg)
+	database, cfg := browserFixture(t)
+	handler := newHandler(cfg, database)
 	cookie := browserLogin(t, handler)
 	for _, endpoint := range []struct{ method, path, body string }{
 		{"POST", "/api/v2/sessions", `{"username":"reader","password":"secret"}`},
@@ -179,7 +179,7 @@ func TestBrowserSessionOriginProtection(t *testing.T) {
 
 func TestBrowserSessionInvalidAndExpired(t *testing.T) {
 	database, cfg := browserFixture(t)
-	handler := newHandler(cfg)
+	handler := newHandler(cfg, database)
 	for _, body := range []string{`{}`, `{"username":"reader","password":"wrong"}`, `{"username":"missing","password":"secret"}`} {
 		w := browserRequest(handler, "POST", "/api/v2/sessions", body, browserOrigin, nil)
 		if w.Code != 400 && w.Code != 401 {
@@ -221,7 +221,7 @@ func TestBrowserSessionInvalidAndExpired(t *testing.T) {
 }
 
 func TestBrowserPasskeySession(t *testing.T) {
-	_, cfg := browserFixture(t)
+	database, cfg := browserFixture(t)
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -231,10 +231,14 @@ func TestBrowserPasskeySession(t *testing.T) {
 		t.Fatal(err)
 	}
 	credentialID := []byte("test-passkey")
-	if err := db.AddWebAuthnCredential(1, webauthn.Credential{ID: credentialID, PublicKey: publicKey}, "test"); err != nil {
+	if err := db.NewCredentialRepository(database).AddWebAuthnCredential(t.Context(), 1, webauthn.Credential{ID: credentialID, PublicKey: publicKey}, "test"); err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler(cfg)
+	handler := newHandler(cfg, database)
+	// A second application has the same user ID but no passkey. The first
+	// service must keep using its own users and credential repositories.
+	otherDB, _ := browserFixture(t)
+	_ = newHandler(cfg, otherDB)
 	begin := browserRequest(handler, "POST", "/api/v2/sessions/passkey/begin", "", browserOrigin, nil)
 	if begin.Code != 200 {
 		t.Fatalf("begin = %d, %s", begin.Code, begin.Body.String())
@@ -265,7 +269,7 @@ func TestBrowserPasskeySession(t *testing.T) {
 	}})
 	finish := browserRequest(handler, "POST", "/api/v2/sessions/passkey/finish", string(body), browserOrigin, nil)
 	cookie := browserLoginCookie(t, finish)
-	if w := browserRequest(newHandler(cfg), "GET", "/api/v2/me", "", "", cookie); w.Code != 200 {
+	if w := browserRequest(newHandler(cfg, database), "GET", "/api/v2/me", "", "", cookie); w.Code != 200 {
 		t.Fatalf("passkey cookie = %d, %s", w.Code, w.Body.String())
 	}
 	if w := browserRequest(handler, "POST", "/api/v2/sessions/passkey/finish", string(body), browserOrigin, nil); w.Code != 401 {
@@ -274,8 +278,8 @@ func TestBrowserPasskeySession(t *testing.T) {
 }
 
 func TestBrowserSessionOriginAndCORSConfiguration(t *testing.T) {
-	_, cfg := browserFixture(t)
-	handler := newHandler(cfg)
+	database, cfg := browserFixture(t)
+	handler := newHandler(cfg, database)
 	r := httptest.NewRequest("POST", "/api/v2/sessions", strings.NewReader(`{"username":"reader","password":"secret"}`))
 	r.Header.Add("Origin", browserOrigin)
 	r.Header.Add("Origin", browserOrigin)
@@ -286,7 +290,7 @@ func TestBrowserSessionOriginAndCORSConfiguration(t *testing.T) {
 	}
 	wildcard := cfg
 	wildcard.AllowedOrigins = []string{"*"}
-	if w := browserRequest(newHandler(wildcard), "POST", "/api/v2/sessions", `{"username":"reader","password":"secret"}`, browserOrigin, nil); w.Code != 403 {
+	if w := browserRequest(newHandler(wildcard, database), "POST", "/api/v2/sessions", `{"username":"reader","password":"secret"}`, browserOrigin, nil); w.Code != 403 {
 		t.Fatalf("wildcard origin = %d", w.Code)
 	}
 	preflight := httptest.NewRequest("OPTIONS", "/api/v2/sessions/current", nil)
@@ -301,7 +305,7 @@ func TestBrowserSessionOriginAndCORSConfiguration(t *testing.T) {
 	noPasskeys.WebAuthnRPID = ""
 	noPasskeys.WebAuthnRPOrigin = ""
 	for _, path := range []string{"/api/v2/sessions/passkey/begin", "/api/v2/sessions/passkey/finish"} {
-		if w := browserRequest(newHandler(noPasskeys), "POST", path, "{}", browserOrigin, nil); w.Code != 503 {
+		if w := browserRequest(newHandler(noPasskeys, database), "POST", path, "{}", browserOrigin, nil); w.Code != 503 {
 			t.Fatalf("unconfigured passkey %s = %d", path, w.Code)
 		}
 	}
@@ -316,7 +320,7 @@ func TestBrowserSyncCursorAndSessionAfterRestart(t *testing.T) {
 	if _, err := database.Exec("INSERT INTO item (id,feed_id,title,text,date,link) VALUES (1,1,'test','','2026-01-01T00:00:00Z','')"); err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler(cfg)
+	handler := newHandler(cfg, database)
 	cookie := browserLogin(t, handler)
 	page := browserRequest(handler, "GET", "/api/v2/items/sync", "", "", cookie)
 	var response struct {
@@ -326,11 +330,11 @@ func TestBrowserSyncCursorAndSessionAfterRestart(t *testing.T) {
 		t.Fatalf("sync page = %d, %s, %v", page.Code, page.Body.String(), err)
 	}
 	path := "/api/v2/items/changes?cursor=" + response.SyncCursor
-	if w := browserRequest(newHandler(cfg), "GET", path, "", "", cookie); w.Code != 200 {
+	if w := browserRequest(newHandler(cfg, database), "GET", path, "", "", cookie); w.Code != 200 {
 		t.Fatalf("restored sync = %d, %s", w.Code, w.Body.String())
 	}
 	cfg.SyncCursorSecret = strings.Repeat("r", 32)
-	restarted := newHandler(cfg)
+	restarted := newHandler(cfg, database)
 	if w := browserRequest(restarted, "GET", path, "", "", cookie); w.Code != 400 {
 		t.Fatalf("rotated key accepted old cursor = %d", w.Code)
 	}

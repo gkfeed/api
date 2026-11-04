@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"gkfeed/api/internal/config"
-	"gkfeed/api/internal/db"
 	"gkfeed/api/internal/passwordhash"
 	"gkfeed/api/internal/testschema"
 )
@@ -22,7 +21,7 @@ func TestDeleteRouteDoesNotAllowGet(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/delete?id=1", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(config.Config{}).ServeHTTP(response, request)
+	newHandler(config.Config{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/v1/delete returned status %d; want %d", response.Code, http.StatusNotFound)
@@ -34,7 +33,7 @@ func TestSwaggerRoutesAreUnderAPI(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
 
-		newHandler(config.Config{}).ServeHTTP(response, request)
+		newHandler(config.Config{}, nil).ServeHTTP(response, request)
 
 		if response.Code != http.StatusOK {
 			t.Fatalf("GET %s returned status %d; want %d", path, response.Code, http.StatusOK)
@@ -43,7 +42,7 @@ func TestSwaggerRoutesAreUnderAPI(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil)
 	response := httptest.NewRecorder()
-	newHandler(config.Config{}).ServeHTTP(response, request)
+	newHandler(config.Config{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("GET /swagger/index.html returned status %d; want %d", response.Code, http.StatusNotFound)
@@ -57,8 +56,6 @@ func TestMeRouteAcceptsBasicAuth(t *testing.T) {
 		t.Fatalf("open test database: %v", err)
 	}
 	defer database.Close()
-	db.Configure(database)
-	t.Cleanup(func() { db.Configure(nil) })
 
 	testschema.Init(t, database)
 
@@ -73,7 +70,7 @@ func TestMeRouteAcceptsBasicAuth(t *testing.T) {
 	request.SetBasicAuth("reader", "secret")
 	response := httptest.NewRecorder()
 
-	newHandler(config.Config{}).ServeHTTP(response, request)
+	newHandler(config.Config{}, database).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET /api/v1/auth/me returned status %d; want %d", response.Code, http.StatusOK)
@@ -99,8 +96,7 @@ func TestPasswordLoginRefreshesAndRevokesRotatedSessions(t *testing.T) {
 	}
 	defer database.Close()
 	database.SetMaxOpenConns(1)
-	db.Configure(database)
-	t.Cleanup(func() { db.Configure(nil) })
+
 	testschema.Init(t, database)
 	hash, err := passwordhash.HashPassword("secret")
 	if err != nil {
@@ -113,7 +109,7 @@ func TestPasswordLoginRefreshesAndRevokesRotatedSessions(t *testing.T) {
 	handler := newHandler(config.Config{
 		AccessTokenTTL:  30 * time.Minute,
 		RefreshTokenTTL: 90 * 24 * time.Hour,
-	})
+	}, database)
 	loginRequest := httptest.NewRequest(
 		http.MethodPost,
 		"/api/v1/auth/login",
@@ -211,8 +207,6 @@ func TestItemRouteRequiresAuthenticationAndOwner(t *testing.T) {
 		t.Fatalf("open test database: %v", err)
 	}
 	defer database.Close()
-	db.Configure(database)
-	t.Cleanup(func() { db.Configure(nil) })
 
 	testschema.Init(t, database)
 
@@ -259,7 +253,7 @@ func TestItemRouteRequiresAuthenticationAndOwner(t *testing.T) {
 			}
 			response := httptest.NewRecorder()
 
-			newHandler(config.Config{}).ServeHTTP(response, request)
+			newHandler(config.Config{}, database).ServeHTTP(response, request)
 
 			if response.Code != test.wantStatus {
 				t.Fatalf("GET /api/v1/item returned status %d; want %d", response.Code, test.wantStatus)
@@ -272,7 +266,7 @@ func TestFeedTypesRouteIsPublic(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/feed_types", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(config.Config{}).ServeHTTP(response, request)
+	newHandler(config.Config{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET /api/v1/feed_types returned status %d; want %d", response.Code, http.StatusOK)

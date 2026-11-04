@@ -67,8 +67,8 @@ func resourceBearer(t *testing.T, handler http.Handler) string {
 }
 
 func TestResourceErrorsRequireAuthentication(t *testing.T) {
-	resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	database := resourceTestDatabase(t)
+	handler := newHandler(config.Config{}, database)
 	for _, operation := range resourceOperations {
 		for _, credentials := range []string{"", "wrong-password", "Bearer invalid-token"} {
 			t.Run(operation.method+operation.path+credentials, func(t *testing.T) {
@@ -85,8 +85,8 @@ func TestResourceErrorsRequireAuthentication(t *testing.T) {
 }
 
 func TestResourceErrorsValidateIDAndOwnership(t *testing.T) {
-	resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	database := resourceTestDatabase(t)
+	handler := newHandler(config.Config{}, database)
 	for _, resource := range []string{"feeds", "items"} {
 		for _, method := range []string{http.MethodGet, http.MethodDelete} {
 			for _, id := range []string{"nope", "0", "-1", strings.Repeat("9", 32)} {
@@ -112,8 +112,8 @@ func TestResourceErrorsValidateIDAndOwnership(t *testing.T) {
 }
 
 func TestResourceResponsesAcceptBearer(t *testing.T) {
-	resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	database := resourceTestDatabase(t)
+	handler := newHandler(config.Config{}, database)
 	credentials := resourceBearer(t, handler)
 	wantFeed := map[string]any{
 		"id": float64(11), "title": "Owner feed", "type": "web",
@@ -155,7 +155,7 @@ func TestResourceResponsesAcceptBearer(t *testing.T) {
 
 func TestResourceErrorsHideStorageFailures(t *testing.T) {
 	database := resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	handler := newHandler(config.Config{}, database)
 	credentials := resourceBearer(t, handler)
 	if err := database.Close(); err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestResourceErrorsHideStorageFailures(t *testing.T) {
 }
 
 func TestResourceMethodErrors(t *testing.T) {
-	handler := newHandler(config.Config{})
+	handler := newHandler(config.Config{}, nil)
 	for _, test := range []struct{ method, path, allow string }{
 		{http.MethodDelete, "/api/v2/feeds", "GET, POST"},
 		{http.MethodPatch, "/api/v2/feeds/11", "GET, DELETE"},
@@ -194,8 +194,8 @@ func TestResourceMethodErrors(t *testing.T) {
 }
 
 func TestResourceErrorsPreserveOtherRoutes(t *testing.T) {
-	resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	database := resourceTestDatabase(t)
+	handler := newHandler(config.Config{}, database)
 	for _, test := range []struct {
 		method, path, credentials, body string
 		status                          int
@@ -226,11 +226,11 @@ func TestResourceErrorsPreserveOtherRoutes(t *testing.T) {
 }
 
 func TestResourceErrorsPreserveFeedCreationContract(t *testing.T) {
-	resourceTestDatabase(t)
+	database := resourceTestDatabase(t)
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/feeds", strings.NewReader(`{"url":"not-a-url"}`))
 	request.SetBasicAuth("owner", "secret")
 	response := httptest.NewRecorder()
-	newHandler(config.Config{}).ServeHTTP(response, request)
+	newHandler(config.Config{}, database).ServeHTTP(response, request)
 	var body struct {
 		Error struct {
 			Code    string `json:"code"`
@@ -243,8 +243,8 @@ func TestResourceErrorsPreserveFeedCreationContract(t *testing.T) {
 }
 
 func TestResourceErrorsPreserveBrowserSessionPolicyAndCookies(t *testing.T) {
-	_, cfg := browserFixture(t)
-	handler := newHandler(cfg)
+	database, cfg := browserFixture(t)
+	handler := newHandler(cfg, database)
 	cookie := browserLogin(t, handler)
 	response := browserRequest(handler, http.MethodDelete, "/api/v2/feeds/11", "", "", cookie)
 	if response.Code != 403 || response.Body.String() != "Forbidden origin\n" || response.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
@@ -263,7 +263,7 @@ func TestResourceErrorsPreserveBrowserSessionPolicyAndCookies(t *testing.T) {
 }
 
 func TestResourceErrorsPreserveCORSPreflight(t *testing.T) {
-	handler := newHandler(config.Config{AllowedOrigins: []string{"https://reader.example"}})
+	handler := newHandler(config.Config{AllowedOrigins: []string{"https://reader.example"}}, nil)
 	request := httptest.NewRequest(http.MethodOptions, "/api/v2/feeds/11", nil)
 	request.Header.Set("Origin", "https://reader.example")
 	request.Header.Set("Access-Control-Request-Method", http.MethodGet)

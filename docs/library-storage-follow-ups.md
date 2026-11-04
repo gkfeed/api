@@ -12,8 +12,9 @@ must remain an authenticated, non-mutating `410 Gone` compatibility stub.
 
 No removal date is assigned yet.
 
-## Inject auth repositories
+## Auth repository injection
 
-Replace the temporary package-level `internal/db.Configure` wiring with
-constructor-injected repositories for users, passwords, WebAuthn credentials,
-and refresh tokens.
+Implemented. Auth consumers receive user, credential, refresh-token and browser-session
+repositories through constructors. Each application owns its SQL pool and access-session
+lifecycle lock; tests use separate pools or local lookup fakes. `internal/db.Configure`
+is removed. See [README](../README.md) for request cancellation and token guarantees.
