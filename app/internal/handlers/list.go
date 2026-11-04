@@ -10,6 +10,7 @@ import (
 // @Produce      json
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200  {array}   object
 // @Failure      401
 // @Failure      500

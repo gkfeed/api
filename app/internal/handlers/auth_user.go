@@ -8,6 +8,7 @@ import "net/http"
 // @Produce      json
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200  {object}  object{id=int,name=string}
 // @Failure      401
 // @Router       /api/v1/auth/me [get]

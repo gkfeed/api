@@ -33,7 +33,7 @@ type feedCreationError struct {
 // @Description Resolves missing metadata and creates all selected subscriptions atomically. Explicit type or types overrides automatic selection. Repeats return existing feeds without changing them.
 // @Tags feeds
 // @Accept json
-// @Produce json
+// @Produce json,plain
 // @Param feed body createFeedsDTO true "One source URL, optional title and either type or types"
 // @Security BasicAuth
 // @Security BearerAuth
@@ -41,6 +41,7 @@ type feedCreationError struct {
 // @Success 200 {object} feedCreationResponse
 // @Failure 400
 // @Failure 401
+// @Failure 403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure 422 {object} feedCreationError
 // @Failure 500
 // @Failure 502 {object} feedCreationError
