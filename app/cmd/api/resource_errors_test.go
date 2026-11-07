@@ -20,8 +20,11 @@ var resourceOperations = []struct{ method, path string }{
 	{http.MethodDelete, "/api/v2/items/22"},
 }
 
-func resourceRequest(handler http.Handler, method, path, credentials string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, path, nil)
+func resourceRequest(handler http.Handler, method, path, credentials string, body ...string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, strings.NewReader(strings.Join(body, "")))
+	if len(body) > 0 {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	switch credentials {
 	case "owner", "other":
 		request.SetBasicAuth(credentials, "secret")
