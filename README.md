@@ -107,8 +107,10 @@ docker compose up --build -d
 
 Docker Compose requires `GKFEED_DATABASE_URL` for an externally provisioned
 PostgreSQL database. It does not start a database or run migrations.
-The deployment workflow runs tests on pushes to `master`, but deployment
-requires a manual run with `cutover_ready` confirmed. Confirm that the infra
+`api-contract.yml` runs the general checks and build for `v1`. The deployment
+workflow adds PostgreSQL 17 contracts against a disposable service. Deployment
+requires a manual run with `cutover_ready` confirmed, PostgreSQL contracts and
+`make check` passing. Confirm that the infra
 schema, grants, importer, sequence synchronization, and cutover checks are
 complete before selecting that input.
 
@@ -379,3 +381,20 @@ passwords, WebAuthn lookups, refresh tokens, cancellation of HTTP refresh
 blocked on an advisory lock, and application grants.
 Without this variable, `make check` runs local fixtures and skips PostgreSQL
 integration tests.
+
+CI checks out merged infra revision
+[`76b69007f77e2cea64113b90bd74219128958209`](https://github.com/gkfeed/infra/commit/76b69007f77e2cea64113b90bd74219128958209).
+It includes prerequisite `20261012101552_add_browser_sessions`. CI uses infra's
+`make migrate status` and pinned dbmate `2.35.1` with a read-only mount and
+schema dumping disabled. The disposable service uses a random host port and
+no repository secrets. The API and deployment do not execute DDL.
+
+Sync tests cover snapshot consistency, page ceilings, changes, feed cascades,
+user isolation and concurrent commit order. Run the PostgreSQL contracts with:
+
+```sh
+make swagger
+cd app
+GKFEED_TEST_DATABASE_URL='<disposable operator connection URL>' \
+  go test ./internal/storage/postgres -run '^TestPostgres' -count=1 -timeout 120s
+```
