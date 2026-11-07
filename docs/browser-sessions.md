@@ -78,11 +78,17 @@ CREATE INDEX browser_sessions_expires_at_idx ON public.browser_sessions (expires
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.browser_sessions TO gkfeed_api;
 ```
 
-Startup requires `20261012101552` in `public.schema_migrations` alongside the
-canonical schema, application roles, and item sync IDs. Later compatible
-migrations are allowed. It also checks read access to all five browser-session
-columns. The application role needs `UPDATE` for activity renewal. The API never
-executes DDL. User deletion remains outside this API's scope.
+Startup requires these migration IDs in `public.schema_migrations`:
+
+- `20260904184133_create_canonical_schema`
+- `20260905082946_add_application_roles`
+- `20260927071753_add_item_changes`
+- `20261012101552_add_browser_sessions`
+
+Later compatible migrations are allowed, but they do not replace these IDs. It
+also checks read access to all five browser-session columns. The application
+role needs `UPDATE` for activity renewal. The API never executes DDL. User
+deletion remains outside this API's scope.
 
 ## Frontend follow-up
 

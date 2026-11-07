@@ -17,16 +17,12 @@ Do not deploy this branch as an intermediate SQLite release. Before merge or
 deployment, confirm the infra schema and grants, importer completion, sequence
 synchronization, and cutover checks.
 
-Infra owns all DDL. Startup reads `public.schema_migrations` and requires
-`20260904184133_create_canonical_schema`,
-`20260905082946_add_application_roles`, the item sync migration
-`20260927071753_add_item_changes`, and the browser-session migration
-`20261012101552_add_browser_sessions`. Missing migrations or an unreadable
-registry prevent startup. Later compatible migrations are allowed but do not
-replace these prerequisites. Startup also checks access to the required
+Infra owns all DDL. Startup validates the required infra migrations and the
 `browser_sessions` columns described in the
-[browser session contract](docs/browser-sessions.md). Infra must apply the
-merged migration before deployment; the API does not execute its DDL.
+[browser session contract](docs/browser-sessions.md). Missing migrations or an
+unreadable registry prevent startup. Later compatible migrations are allowed,
+but they do not replace the required IDs. Infra must apply migrations through
+its pinned `make migrate` before deployment; the API does not execute DDL.
 
 The importer owns legacy password conversion and deleted-item tombstone
 processing. The API never creates tables or migrates legacy data. SQLite is
