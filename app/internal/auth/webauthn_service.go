@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,6 +13,10 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
+
+// ErrInvalidWebAuthnCeremony identifies rejected client credentials or ceremonies.
+// Storage and configuration failures must not wrap this error.
+var ErrInvalidWebAuthnCeremony = errors.New("invalid WebAuthn ceremony")
 
 type WebAuthnUserRepository interface {
 	GetUserFromDBByID(context.Context, int) (models.User, error)
@@ -84,12 +90,12 @@ func (s *WebAuthnService) FinishRegistration(ctx context.Context, user models.Us
 	webAuthnUser := webAuthnUserAdapter{User: user, credentials: credentials}
 	pendingCeremony, ok := s.ceremonies.pop(response.Response.CollectedClientData.Challenge)
 	if !ok {
-		return nil, "", fmt.Errorf("session not found or expired")
+		return nil, "", fmt.Errorf("%w: session not found or expired", ErrInvalidWebAuthnCeremony)
 	}
 
 	credential, err := s.webAuthn.CreateCredential(webAuthnUser, *pendingCeremony.session, response)
 	if err != nil {
-		return nil, "", fmt.Errorf("create credential: %w", err)
+		return nil, "", fmt.Errorf("%w: create credential: %w", ErrInvalidWebAuthnCeremony, err)
 	}
 	if err := s.credentials.AddWebAuthnCredential(ctx, user.ID, *credential, pendingCeremony.registrationName); err != nil {
 		return nil, "", fmt.Errorf("store credential: %w", err)
@@ -109,16 +115,22 @@ func (s *WebAuthnService) BeginLogin() (*protocol.CredentialAssertion, error) {
 func (s *WebAuthnService) FinishLogin(ctx context.Context, response *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, models.User, error) {
 	pendingCeremony, ok := s.ceremonies.pop(response.Response.CollectedClientData.Challenge)
 	if !ok {
-		return nil, models.User{}, fmt.Errorf("session not found or expired")
+		return nil, models.User{}, fmt.Errorf("%w: session not found or expired", ErrInvalidWebAuthnCeremony)
 	}
 
 	userID, err := s.credentials.GetWebAuthnUserIDByCredentialID(ctx, response.RawID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, models.User{}, fmt.Errorf("%w: credential not found", ErrInvalidWebAuthnCeremony)
+		}
 		return nil, models.User{}, fmt.Errorf("credential not found: %w", err)
 	}
 
 	user, err := s.users.GetUserFromDBByID(ctx, userID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, models.User{}, fmt.Errorf("%w: user not found", ErrInvalidWebAuthnCeremony)
+		}
 		return nil, models.User{}, fmt.Errorf("user not found: %w", err)
 	}
 
@@ -139,7 +151,7 @@ func (s *WebAuthnService) FinishLogin(ctx context.Context, response *protocol.Pa
 		response,
 	)
 	if err != nil {
-		return nil, models.User{}, fmt.Errorf("validate login: %w", err)
+		return nil, models.User{}, fmt.Errorf("%w: validate login: %w", ErrInvalidWebAuthnCeremony, err)
 	}
 
 	if err := s.credentials.UpdateWebAuthnCredential(ctx, *credential); err != nil {

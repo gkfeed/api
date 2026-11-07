@@ -298,6 +298,34 @@ under the lifecycle lock even if the request has since been canceled. This keeps
 concurrent refresh and logout ordered. Existing v1/v2 response formats and
 database grants are unchanged; refresh tokens still require no `UPDATE` grant.
 
+### Passkey HTTP contract
+
+Passkey registration uses authenticated `POST /api/v1/auth/register/begin` and
+`POST /api/v1/auth/register/finish`. Token login uses public
+`POST /api/v1/auth/login/begin` and `POST /api/v1/auth/login/finish`.
+The corresponding browser login routes are listed above.
+
+Registration begin and all passkey finish requests have a 1 MiB body limit,
+including trailing whitespace. Malformed JSON, extra JSON values and oversized
+bodies return `400`, matching other auth JSON requests. Registration begin
+accepts an optional `{"name":"work laptop"}` object; an omitted body or a
+whitespace-only body still starts registration with an empty name. Unknown
+fields retain their existing behavior and are ignored.
+
+An invalid assertion, unknown credential, missing/expired challenge or replay
+returns `401` on both login finish routes. Registration validation failures,
+including challenge replay, return `400`. Storage failures during credential
+lookup, validation-data loading, credential writes or session creation return
+`500` with a generic message. These auth errors keep their existing plain-text
+format; they do not use the v2 resource error format.
+
+Successful v1 passkey login remains `200` with `access_token`, `refresh_token`,
+`token_type`, `expires_in`, `refresh_expires_in` and `credential_id`. Browser
+passkey login remains `201` with only `{id, name}` and a session cookie.
+Registration finish remains `200` with `{id, name}` for the credential.
+The v1 auth routes and v2 browser-session routes use `Cache-Control: no-store`
+on successes and handled errors, including authentication and Origin failures.
+
 The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing
 clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive
