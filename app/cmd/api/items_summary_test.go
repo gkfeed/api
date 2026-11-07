@@ -10,8 +10,7 @@ import (
 )
 
 func TestItemListViews(t *testing.T) {
-	resourceTestDatabase(t)
-	handler := newHandler(config.Config{})
+	handler := newHandler(config.Config{}, resourceTestDatabase(t))
 	for _, path := range []string{"/api/v1/get_items", "/api/v2/items"} {
 		t.Run(path, func(t *testing.T) {
 			readPage := func(query, user string) (map[string]any, []map[string]any) {
@@ -80,7 +79,7 @@ func TestItemListViews(t *testing.T) {
 }
 
 func TestSwaggerItemListViews(t *testing.T) {
-	response := resourceRequest(newHandler(config.Config{}), http.MethodGet, "/api/swagger/doc.json", "")
+	response := resourceRequest(newHandler(config.Config{}, nil), http.MethodGet, "/api/swagger/doc.json", "")
 	var document struct {
 		Paths map[string]map[string]struct {
 			Parameters []struct {
