@@ -42,6 +42,9 @@ Run the local quality checks with:
 make check
 ```
 
+See [Testing](docs/testing.md) for HTTP scenarios, fixture boundaries, and focused
+test commands.
+
 `make lint` runs `go vet` and the same `gopls` diagnostics used by Go editor
 integrations. Install `gopls` first with `make install-lint`.
 

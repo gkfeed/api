@@ -15,7 +15,7 @@ import (
 
 func resourceTestDatabase(t *testing.T) *sql.DB {
 	t.Helper()
-	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "db.sqlite"))
+	database, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "db.sqlite")+"?_busy_timeout=5000")
 	if err != nil {
 		t.Fatal(err)
 	}

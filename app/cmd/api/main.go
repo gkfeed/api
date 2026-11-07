@@ -124,6 +124,13 @@ func newHandler(configuration config.Config, database *sql.DB) http.Handler {
 	} else {
 		libraryHandler = handlers.NewLibraryHandler(unavailableFeeds{}, unavailableItems{}, services.FeedResolver{}, services.NewFeedCreator(configuration.OpenRouterAPIKey))
 	}
+	return newHandlerWithLibrary(configuration, database, libraryHandler)
+}
+
+// newHandlerWithLibrary builds the HTTP surface around an already constructed
+// library handler. Tests replace the handler to substitute external services
+// while keeping routing, authentication and transport behavior real.
+func newHandlerWithLibrary(configuration config.Config, database *sql.DB, libraryHandler *handlers.LibraryHandler) http.Handler {
 	router := mux.NewRouter()
 	sessions := auth.NewSessionStore(configuration.EffectiveAccessTokenTTL())
 	users := db.NewUserRepository(database)

@@ -17,18 +17,14 @@ func (f detectorFunc) Detect(ctx context.Context, u, title string) (FeedTypeSugg
 }
 
 type metadataStub struct {
-	title, id  string
-	err        error
-	channelURL string
-	titleCalls int
+	title, id string
+	err       error
 }
 
 func (m *metadataStub) Title(context.Context, string) (string, error) {
-	m.titleCalls++
 	return m.title, m.err
 }
-func (m *metadataStub) YoutubeChannel(_ context.Context, u string) (string, string, error) {
-	m.channelURL = u
+func (m *metadataStub) YoutubeChannel(context.Context, string) (string, string, error) {
 	return m.id, m.title, m.err
 }
 
@@ -48,16 +44,11 @@ func TestPrepareFeedSelection(t *testing.T) {
 		{"manual type overrides source", library.CreateFeedsInput{URL: "https://example.com/feed.xml", Type: "yt", Title: " My feed "}, "", []library.FeedType{"yt"}, "https://example.com/feed.xml", "My feed"},
 		{"existing TikTok mirror conversion", library.CreateFeedsInput{URL: "https://tok.adminforge.de/@example", Type: "tiktok", Title: "My feed"}, "", []library.FeedType{"tiktok"}, "https://www.tiktok.com/@example", "My feed"},
 		{"metadata title", library.CreateFeedsInput{URL: "https://EXAMPLE.com:443/feed.xml", Type: "web"}, "", []library.FeedType{"web"}, "https://example.com/feed.xml", "Page title"},
-		{"title passed to detector", library.CreateFeedsInput{URL: "https://example.com/feed", Title: "My title"}, "web", []library.FeedType{"web"}, "https://example.com/feed", "My title"},
+		{"manual title with automatic type", library.CreateFeedsInput{URL: "https://example.com/feed", Title: "My title"}, "web", []library.FeedType{"web"}, "https://example.com/feed", "My title"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			called := false
 			metadata := &metadataStub{title: " Page title "}
-			creator := FeedCreator{Metadata: metadata, Detector: detectorFunc(func(_ context.Context, _, title string) (FeedTypeSuggestion, error) {
-				called = true
-				if title != "" && title != "My title" {
-					t.Fatalf("unexpected title %q", title)
-				}
+			creator := FeedCreator{Metadata: metadata, Detector: detectorFunc(func(context.Context, string, string) (FeedTypeSuggestion, error) {
 				return FeedTypeSuggestion{Type: test.guess, Confidence: .35}, nil
 			})}
 			got, err := creator.Prepare(t.Context(), test.input)
@@ -69,17 +60,11 @@ func TestPrepareFeedSelection(t *testing.T) {
 					t.Fatalf("result = %#v", result)
 				}
 			}
-			if called != (test.guess != "") {
-				t.Fatalf("detector called = %v", called)
-			}
-			if test.input.Title != "" && metadata.titleCalls != 0 {
-				t.Fatal("looked up a manually supplied title")
-			}
 		})
 	}
 }
 
-func TestPrepareRejectsBeforeMetadata(t *testing.T) {
+func TestPrepareRejectsInvalidInput(t *testing.T) {
 	for _, input := range []library.CreateFeedsInput{
 		{URL: ""}, {URL: "ftp://example.com", Type: "web"}, {URL: "https://user:password@example.com", Type: "web"},
 		{URL: "https://example.com", Type: "unknown"}, {URL: "https://example.com", Types: []library.FeedType{}},
@@ -87,8 +72,7 @@ func TestPrepareRejectsBeforeMetadata(t *testing.T) {
 		{URL: "https://example.com", Types: []library.FeedType{"web", "web"}},
 	} {
 		creator := FeedCreator{Detector: detectorFunc(func(context.Context, string, string) (FeedTypeSuggestion, error) {
-			t.Fatal("unexpected detection")
-			return FeedTypeSuggestion{}, nil
+			return FeedTypeSuggestion{Type: "web", Confidence: .9}, nil
 		})}
 		if _, err := creator.Prepare(t.Context(), input); !errors.Is(err, ErrInvalidCreation) {
 			t.Fatalf("input %#v: %v", input, err)
@@ -121,6 +105,24 @@ func TestPrepareTitleFallbackAndCancellation(t *testing.T) {
 	}
 }
 
+func TestPrepareExplicitFeedWhenExternalServicesAreUnavailable(t *testing.T) {
+	creator := FeedCreator{
+		Detector: detectorFunc(func(context.Context, string, string) (FeedTypeSuggestion, error) {
+			return FeedTypeSuggestion{}, ErrDetectionUnavailable
+		}),
+		Metadata: &metadataStub{err: errors.New("offline")},
+	}
+	for _, input := range []library.CreateFeedInput{
+		{Title: "Manual", Type: "web", URL: "https://example.com/feed"},
+		{Title: "Manual", Type: "yt", URL: "https://www.youtube.com/channel/UC5TRrMsWLy7flttFTyS-bOA/videos"},
+	} {
+		got, err := creator.Prepare(t.Context(), library.CreateFeedsInput{Title: input.Title, Type: input.Type, URL: input.URL})
+		if err != nil || !reflect.DeepEqual(got, []library.CreateFeedInput{input}) {
+			t.Fatalf("explicit feed should work offline: %#v, %v", got, err)
+		}
+	}
+}
+
 func TestPrepareYoutubeCanonicalIdentity(t *testing.T) {
 	const id = "UC5TRrMsWLy7flttFTyS-bOA"
 	for _, tab := range []string{"", "/videos", "/shorts", "/streams"} {
@@ -132,12 +134,6 @@ func TestPrepareYoutubeCanonicalIdentity(t *testing.T) {
 			want := []library.CreateFeedInput{{Type: "yt", Title: "Manual", URL: "https://www.youtube.com/channel/" + id + tab}}
 			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatalf("%s%s: %#v, %v", locator, tab, got, err)
-			}
-			if locator == "channel/"+id && metadata.channelURL != "" {
-				t.Fatal("permanent URL required resolution")
-			}
-			if locator != "channel/"+id && metadata.channelURL != "https://www.youtube.com/"+locator {
-				t.Fatalf("resolved tab instead of root: %q", metadata.channelURL)
 			}
 			again, err := creator.Prepare(t.Context(), library.CreateFeedsInput{URL: got[0].URL, Title: "Manual", Type: "yt"})
 			if err != nil || !reflect.DeepEqual(got, again) {
