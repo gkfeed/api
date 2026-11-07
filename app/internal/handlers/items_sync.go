@@ -110,6 +110,7 @@ type syncItemsResponse struct {
 // @Param cursor query string false "Opaque page cursor"
 // @Security BasicAuth
 // @Security BearerAuth
+// @Security BrowserSession
 // @Success 200 {object} syncItemsResponse
 // @Failure 400
 // @Failure 401
@@ -178,6 +179,7 @@ type itemChangesResponse struct {
 // @Param cursor query string true "Opaque sync cursor"
 // @Security BasicAuth
 // @Security BearerAuth
+// @Security BrowserSession
 // @Success 200 {object} itemChangesResponse
 // @Failure 400
 // @Failure 401

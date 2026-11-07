@@ -50,6 +50,9 @@ func (r fakeItemRepository) List(context.Context, int) ([]library.Item, error) {
 func (r fakeItemRepository) ListPage(context.Context, int, *int, int) ([]library.Item, error) {
 	return r.state.page.Items, nil
 }
+func (r fakeItemRepository) ListSummaryPage(context.Context, int, *int, int) ([]library.ItemSummary, error) {
+	return nil, nil
+}
 func (r fakeItemRepository) Delete(ctx context.Context, userID, itemID int) error {
 	if r.state.deleteItem != nil {
 		return r.state.deleteItem(ctx, userID, itemID)

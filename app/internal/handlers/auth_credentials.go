@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"gkfeed/api/internal/db"
-
 	"github.com/gorilla/mux"
 )
 
@@ -16,6 +14,7 @@ import (
 // @Produce      json
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200  {array}   object{id=string,name=string,created_at=string,last_used_at=string}
 // @Failure      401
 // @Failure      500
@@ -26,7 +25,7 @@ func (h *AuthHandler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	infos, err := db.ListUserWebAuthnCredentials(user.ID)
+	infos, err := h.credentials.ListUserWebAuthnCredentials(r.Context(), user.ID)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("list credentials: %w", err))
 		return
@@ -58,9 +57,11 @@ func (h *AuthHandler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 // @Param        id   path      string  true  "Credential ID (base64url)"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      204
 // @Failure      400
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      404
 // @Failure      500
 // @Router       /api/v1/auth/credentials/{id} [delete]
@@ -76,7 +77,7 @@ func (h *AuthHandler) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted, err := db.DeleteWebAuthnCredential(credentialID, user.ID)
+	deleted, err := h.credentials.DeleteWebAuthnCredential(r.Context(), credentialID, user.ID)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("delete credential: %w", err))
 		return

@@ -39,18 +39,31 @@ Expired rows do not authenticate. Infra can periodically delete rows where
 `expires_at <= CURRENT_TIMESTAMP` or
 `last_seen_at <= CURRENT_TIMESTAMP - INTERVAL '30 days'`.
 
-## Origin and v1 compatibility
+## Origin, CORS and v1 compatibility
 
-Every v2 login or logout request requires exactly one `Origin` header that
-matches an entry in `GKFEED_ALLOWED_ORIGINS`. Missing, `null`, foreign, or
-wildcard origins receive `403`. Configure full origins with scheme and port,
-without a trailing slash. The proxy must preserve the browser's `Origin`.
-The API does not infer trust from `Host` or forwarded headers.
+Every v2 login or logout request requires exactly one `Origin` header matching
+an entry in `GKFEED_ALLOWED_ORIGINS`, even with Basic/Bearer credentials.
+Missing, duplicate, `null`, foreign or wildcard origins return `403` as
+`text/plain`. Use full HTTP(S) origins with scheme and port, without credentials,
+a path, query, fragment or trailing slash. The proxy must preserve `Origin`;
+the API does not infer trust from `Host` or forwarded headers.
 
-Existing protected v1 routes and v2 feed/item routes also accept the cookie. Unsafe cookie requests,
-including feed changes and passkey registration, require the same Origin check.
-An explicit `Authorization` header uses the existing Basic/Bearer contract.
-Basic and Bearer clients keep their existing request formats.
+Protected v1 routes and all v2 feed/item routes, including sync/changes, accept
+`gkfeed.session`. Cookie authentication requires the same Origin check before
+authentication for methods other than `GET`, `HEAD` and `OPTIONS`. Reads do not
+require Origin. A nonempty `Authorization` header selects Basic/Bearer instead,
+without the cookie Origin check; invalid header credentials never fall back
+to a valid cookie. `GET /api/v2/me` accepts only the cookie.
+
+CORS uses `GKFEED_ALLOWED_ORIGINS`, allows credentials and request headers,
+and permits `GET`, `HEAD`, `POST` and `DELETE`. Allowed origins receive
+`Access-Control-Allow-Origin` and `Access-Control-Allow-Credentials: true`.
+Preflight `OPTIONS` returns `204` without authentication, including on rejection;
+check the permission headers, not status alone. Actual requests still reach
+the router when CORS denies permission. The cookie Origin guard separately
+rejects unsafe cookie requests. CORS wildcard matching does not authorize them.
+Cross-origin browser clients must include credentials; CORS does not override
+`Secure` or `SameSite=Lax`.
 
 The cookie attributes follow the [MDN cookie reference](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie).
 Exact Origin checks follow [OWASP's CSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).

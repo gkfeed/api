@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	"gkfeed/api/internal/library"
 	"gkfeed/api/internal/storage/repositorytest"
 	"gkfeed/api/internal/testschema"
@@ -39,6 +39,43 @@ func TestFeedDeleteRollsBackOnFailure(t *testing.T) {
 	}
 	if _, err := items.Get(t.Context(), 1, id); err != nil {
 		t.Fatalf("item deletion was not rolled back: %v", err)
+	}
+}
+
+func TestSummaryPageDoesNotReadText(t *testing.T) {
+	database := newTestDB(t)
+	database.SetMaxOpenConns(1)
+	feed, err := NewFeedRepository(database).Add(t.Context(), 1, library.CreateFeedInput{Title: "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := insertItems(t, database, feed.ID, 1)[0]
+	connection, err := database.Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Ask SQLite to reject any read of item.text. This verifies that the
+	// repository excludes the column, rather than loading and discarding it.
+	err = connection.Raw(func(driverConnection any) error {
+		driverConnection.(*sqlite3.SQLiteConn).RegisterAuthorizer(func(operation int, table, column, _ string) int {
+			if operation == sqlite3.SQLITE_READ && table == "item" && column == "text" {
+				return sqlite3.SQLITE_DENY
+			}
+			return sqlite3.SQLITE_OK
+		})
+		return nil
+	})
+	connection.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := NewItemRepository(database)
+	summaries, err := items.ListSummaryPage(t.Context(), 1, nil, 1)
+	if err != nil || len(summaries) != 1 || summaries[0].ID != id {
+		t.Fatalf("summary with text reads denied = %#v, %v", summaries, err)
+	}
+	if _, err := items.ListPage(t.Context(), 1, nil, 1); err == nil {
+		t.Fatal("full page succeeded despite denying reads of text")
 	}
 }
 

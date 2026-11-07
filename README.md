@@ -45,6 +45,10 @@ make check
 `make lint` runs `go vet` and the same `gopls` diagnostics used by Go editor
 integrations. Install `gopls` first with `make install-lint`.
 
+Auth repositories receive the SQL pool owned by `cmd/api` through constructors.
+Tests use their own pools or lookup fakes. Each router shares one password
+authenticator, browser-session store and access-session lifecycle lock.
+
 ### Swagger 2.0 workflow
 
 Edit the Swaggo annotations in Go handlers and their DTOs. Generated
@@ -81,11 +85,19 @@ Configuration is read from environment variables at startup:
 | --- | --- | --- |
 | `GKFEED_ADDRESS` | `:8086` | HTTP server listen address |
 | `GKFEED_DATABASE_URL` | none (required) | PostgreSQL application connection URL |
-| `GKFEED_ALLOWED_ORIGINS` | Localhost development origins | Comma-separated exact origins for CORS and browser-session mutation checks |
-| `GKFEED_SYNC_CURSOR_SECRET` | Random process-local key | Sync cursor key; accepts `GKFEED_JWT_SECRET` as fallback |
+| `GKFEED_ALLOWED_ORIGINS` | `http://localhost,http://localhost:4200,http://localhost:8086` | Comma-separated origins for CORS and exact browser-session Origin checks. Use full origins without trailing slashes. |
+| `GKFEED_SYNC_CURSOR_SECRET` | Random process-local key | Sync cursor key of at least 32 bytes; takes precedence over `GKFEED_JWT_SECRET` |
+| `GKFEED_JWT_SECRET` | none | Compatibility fallback for the sync cursor key only; at least 32 bytes when used |
 | `GKFEED_ACCESS_TTL` | `30m` | Access-token lifetime |
 | `GKFEED_JWT_REFRESH_TTL` | `2160h` | Refresh-token idle lifetime |
+| `GKFEED_WEBAUTHN_RP_ID` | none | WebAuthn relying-party ID, such as `feed.example`, without scheme or port |
+| `GKFEED_WEBAUTHN_RP_ORIGIN` | none | Single WebAuthn browser origin, such as `https://feed.example`; configure it in `GKFEED_ALLOWED_ORIGINS` too for browser login |
+| `GKFEED_WEBAUTHN_RP_DISPLAY` | `GKFeed` | Relying-party display name shown during passkey registration |
 | `OPENROUTER_API_KEY` | none | Enables Jev feed type detection for URL-only v2 creation. Explicit `type` or `types` works without it. |
+
+WebAuthn requires both RP ID and RP origin to initialize successfully. Otherwise,
+v2 passkey login returns `503` after the Origin check, and v1 passkey routes
+are not registered. Password login remains available.
 
 ## Docker
 
@@ -107,6 +119,9 @@ Swagger UI is available at `/api/swagger/index.html`.
 The resource routes are available under `/api/v2`. Browser sessions, Basic and
 Bearer credentials are accepted for every route below. Feed creation accepts one `url` with
 optional `title` and either `type` or `types`. Deleting a feed also deletes its items.
+
+See the [browser session contract](docs/browser-sessions.md#origin-cors-and-v1-compatibility)
+for credential precedence, Origin checks and cookie restrictions.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -258,6 +273,15 @@ contract described in [`docs/browser-sessions.md`](docs/browser-sessions.md).
 | `POST` | `/api/v1/auth/logout` | Refresh token | Revoke the refresh-token family |
 | `POST` | `/api/v1/auth/logout-all` | Basic, Bearer or cookie | Revoke all sessions for the authenticated user |
 
+`POST /api/v1/add` requires `title`, `type` and `url`. Surrounding whitespace
+is removed from all three fields. JSON `null`, an empty object, and any missing,
+null, empty or whitespace-only required field return `400` before storage is
+called. These errors use the existing v1 plain-text format. Legacy creation
+keeps the caller's explicit type and URL without v2 catalog validation or
+metadata resolution. Successful requests still return `200` with
+`{"created":true,"item":{...}}`; duplicates return the stored feed with
+`created:false`.
+
 Browser sessions survive API restarts and browser closure. They expire after 30
 days of inactivity, with an absolute limit of 90 days. Unsafe cookie requests
 require an allowed `Origin`. See the [browser session contract](docs/browser-sessions.md)
@@ -265,10 +289,37 @@ for response details, the PostgreSQL prerequisite, and deferred frontend/dev-pro
 
 Refresh token IDs in the infra-owned `refresh_tokens` table contain only SHA-256 token digests and random family IDs. Consumed tokens remain as expired rows so reuse can be detected. Each refresh rotates the token; reusing an old token revokes the entire token family and its access sessions. Access sessions are held in memory, so restarting the API invalidates access tokens while valid refresh tokens can obtain new ones.
 
+Password and passkey persistence use the HTTP request context. Token login,
+refresh and logout also honor cancellation and deadlines while waiting for
+the shared lifecycle lock, a database connection or the refresh transaction's
+PostgreSQL advisory lock. Cancellation before commit rolls back the transaction.
+After a successful commit, access-session publication or revocation completes
+under the lifecycle lock even if the request has since been canceled. This keeps
+concurrent refresh and logout ordered. Existing v1/v2 response formats and
+database grants are unchanged; refresh tokens still require no `UPDATE` grant.
+
 The deprecated `/api/v1/add_deleted_items` endpoint no longer reads its body or
 changes data. Authenticated requests receive a JSON `410 Gone` response pointing
 clients to `DELETE /api/v1/items/{id}`; unauthenticated requests still receive
 `401 Unauthorized`.
+
+### Item list summaries
+
+`GET /api/v2/items?view=summary&limit=100` returns the usual `items` and optional
+`next_cursor`, with `id`, `feed_id`, `title`, `date`, and `link` for each item.
+The `text` field is absent, and the database query does not select item text,
+including the lookahead row. Follow `next_cursor` until it is absent, then fetch
+the selected full item with `GET /api/v2/items/{id}` when needed.
+
+The same opt-in view is available on `/api/v1/get_items`; its detail route is
+`/api/v1/item?id=<id>`. Omitting `view` or passing `view=full` preserves the
+existing full-text response. Unsupported, empty, or repeated `view` values
+return `400`. Ownership filtering, descending ID ordering, limits, and cursor
+semantics are shared by both views. Empty pages return `{"items":[]}`.
+
+Clients must opt in and distinguish summaries from full items. This reduces
+full-text transfer and retention for lists; it does not impose a response byte
+budget or change the sync, changes, RSS, or single-item routes.
 
 ### Item synchronization
 
@@ -323,7 +374,8 @@ database. Fixture calls must run serially; do not use `t.Parallel` or share the
 database between test processes. The operator connection resets and seeds
 fixtures; repository and auth operations use `SET ROLE gkfeed_api` through pgx
 connection parameters. Tests cover fixture recreation without change-history
-leaks, concurrent feed creation across multiple connections,
-nullable passwords, WebAuthn lookups, refresh tokens, and application grants.
+leaks, concurrent feed creation across multiple connections, nullable
+passwords, WebAuthn lookups, refresh tokens, cancellation of HTTP refresh
+blocked on an advisory lock, and application grants.
 Without this variable, `make check` runs local fixtures and skips PostgreSQL
 integration tests.

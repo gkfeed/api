@@ -32,6 +32,15 @@ type Item struct {
 	Link   string
 }
 
+// ItemSummary contains the fields needed to choose an item without loading its text.
+type ItemSummary struct {
+	ID     int
+	FeedID int
+	Title  string
+	Date   time.Time
+	Link   string
+}
+
 type ItemDetails struct {
 	Item Item
 	Feed Feed
@@ -39,6 +48,11 @@ type ItemDetails struct {
 
 type Page struct {
 	Items      []Item
+	NextCursor *int
+}
+
+type SummaryPage struct {
+	Items      []ItemSummary
 	NextCursor *int
 }
 
@@ -90,6 +104,7 @@ type ItemRepository interface {
 	Get(ctx context.Context, userID, itemID int) (ItemDetails, error)
 	List(ctx context.Context, userID int) ([]Item, error)
 	ListPage(ctx context.Context, userID int, cursor *int, limit int) ([]Item, error)
+	ListSummaryPage(ctx context.Context, userID int, cursor *int, limit int) ([]ItemSummary, error)
 	Delete(ctx context.Context, userID, itemID int) error
 	SyncPage(ctx context.Context, userID, afterID, maxID, limit int) (SyncPage, error)
 	Changes(ctx context.Context, userID int, afterSequence int64, limit int) (ChangesPage, error)
@@ -140,6 +155,21 @@ func (s *Service) ListItemsPage(ctx context.Context, userID int, cursor *int, li
 
 	nextCursor := items[limit-1].ID
 	return Page{Items: items[:limit], NextCursor: &nextCursor}, nil
+}
+
+func (s *Service) ListItemSummariesPage(ctx context.Context, userID int, cursor *int, limit int) (SummaryPage, error) {
+	items, err := s.items.ListSummaryPage(ctx, userID, cursor, limit+1)
+	if err != nil {
+		return SummaryPage{}, err
+	}
+	if items == nil {
+		items = []ItemSummary{}
+	}
+	if len(items) <= limit {
+		return SummaryPage{Items: items}, nil
+	}
+	nextCursor := items[limit-1].ID
+	return SummaryPage{Items: items[:limit], NextCursor: &nextCursor}, nil
 }
 
 func (s *Service) SyncItemsPage(ctx context.Context, userID, afterID, maxID, limit int) (SyncPage, error) {

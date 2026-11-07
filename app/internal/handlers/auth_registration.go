@@ -17,12 +17,14 @@ type registerBeginRequest struct {
 // @Description  Starts WebAuthn registration, returns creation options for the browser.
 // @Tags         auth
 // @Accept       json
-// @Produce      json
+// @Produce      json,plain
 // @Param        body  body  registerBeginRequest  false  "Optional name for the passkey"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      500
 // @Router       /api/v1/auth/register/begin [post]
 func (h *AuthHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,7 @@ func (h *AuthHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) 
 	var req registerBeginRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	creation, err := h.webAuthnService.BeginRegistration(user, req.Name)
+	creation, err := h.webAuthnService.BeginRegistration(r.Context(), user, req.Name)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("begin registration: %w", err))
 		return
@@ -47,13 +49,15 @@ func (h *AuthHandler) BeginRegistration(w http.ResponseWriter, r *http.Request) 
 // @Description  Completes WebAuthn registration with the attestation response from the browser.
 // @Tags         auth
 // @Accept       json
-// @Produce      json
+// @Produce      json,plain
 // @Param        body  body  object  true  "WebAuthn attestation response"
 // @Security     BasicAuth
 // @Security     BearerAuth
+// @Security     BrowserSession
 // @Success      200   {object}  object{id=string,name=string}
 // @Failure      400
 // @Failure      401
+// @Failure      403 {string} string "Browser-session Origin policy rejected the request; response is text/plain"
 // @Failure      500
 // @Router       /api/v1/auth/register/finish [post]
 func (h *AuthHandler) FinishRegistration(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +72,7 @@ func (h *AuthHandler) FinishRegistration(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	credential, name, err := h.webAuthnService.FinishRegistration(user, parsedResponse)
+	credential, name, err := h.webAuthnService.FinishRegistration(r.Context(), user, parsedResponse)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("finish registration: %w", err))
 		return

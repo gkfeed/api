@@ -5,16 +5,17 @@ import (
 	"net/http"
 
 	"gkfeed/api/internal/auth"
-	"gkfeed/api/internal/db"
 	"gkfeed/api/internal/models"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
 // @Summary Create browser session with a password
+// @Description Returns the user and sets gkfeed.session.
 // @Tags browser sessions
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
 // @Accept json
-// @Produce json
+// @Produce json,plain
 // @Param body body loginRequest true "Credentials"
 // @Success 201 {object} models.User
 // @Failure 400
@@ -31,7 +32,7 @@ func (h *AuthHandler) CreateBrowserSession(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Username and password are required", http.StatusBadRequest)
 		return
 	}
-	user, ok, err := auth.AuthenticatePassword(req.Username, req.Password)
+	user, ok, err := h.passwords.AuthenticatePassword(r.Context(), req.Username, req.Password)
 	if err != nil {
 		writeInternalServerError(w, fmt.Errorf("authenticate password: %w", err))
 		return
@@ -56,6 +57,7 @@ func (h *AuthHandler) issueBrowserSession(w http.ResponseWriter, r *http.Request
 }
 
 // @Summary Current browser user
+// @Description Uses only gkfeed.session and renews the cookie; Basic/Bearer credentials are ignored.
 // @Tags browser sessions
 // @Produce json
 // @Security BrowserSession
@@ -68,7 +70,9 @@ func (h *AuthHandler) BrowserMe(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Revoke current browser session
+// @Description Revokes and clears gkfeed.session. Cookie is optional; repeated or anonymous logout returns 204.
 // @Tags browser sessions
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
 // @Success 204
 // @Failure 403
 // @Failure 500
@@ -76,7 +80,7 @@ func (h *AuthHandler) BrowserMe(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) DeleteBrowserSession(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(auth.BrowserSessionCookie)
 	if err == nil && cookie.Value != "" {
-		if err := db.DeleteBrowserSession(r.Context(), auth.DigestToken(cookie.Value)); err != nil {
+		if err := h.browserSessions.Delete(r.Context(), auth.DigestToken(cookie.Value)); err != nil {
 			writeInternalServerError(w, fmt.Errorf("delete browser session: %w", err))
 			return
 		}
@@ -87,7 +91,8 @@ func (h *AuthHandler) DeleteBrowserSession(w http.ResponseWriter, r *http.Reques
 
 // @Summary Begin browser passkey login
 // @Tags browser sessions
-// @Produce json
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
+// @Produce json,plain
 // @Success 200
 // @Failure 403
 // @Failure 503
@@ -101,9 +106,11 @@ func (h *AuthHandler) BeginBrowserLogin(w http.ResponseWriter, r *http.Request) 
 }
 
 // @Summary Finish browser passkey login
+// @Description Returns the user and sets gkfeed.session.
 // @Tags browser sessions
+// @Param Origin header string true "Exact origin from GKFEED_ALLOWED_ORIGINS"
 // @Accept json
-// @Produce json
+// @Produce json,plain
 // @Param body body object true "WebAuthn assertion response"
 // @Success 201 {object} models.User
 // @Failure 400
@@ -123,7 +130,7 @@ func (h *AuthHandler) FinishBrowserLogin(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid credential assertion response", http.StatusBadRequest)
 		return
 	}
-	_, user, err := h.webAuthnService.FinishLogin(parsed)
+	_, user, err := h.webAuthnService.FinishLogin(r.Context(), parsed)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
