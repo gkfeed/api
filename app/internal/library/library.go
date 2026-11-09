@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 )
 
@@ -142,6 +143,10 @@ func (s *Service) ListItems(ctx context.Context, userID int) ([]Item, error) {
 }
 
 func (s *Service) ListItemsPage(ctx context.Context, userID int, cursor *int, limit int) (Page, error) {
+	if limit < 1 || limit == math.MaxInt || (cursor != nil && *cursor < 0) {
+		return Page{}, errors.New("invalid item pagination")
+	}
+
 	items, err := s.items.ListPage(ctx, userID, cursor, limit+1)
 	if err != nil {
 		return Page{}, err
@@ -158,6 +163,9 @@ func (s *Service) ListItemsPage(ctx context.Context, userID int, cursor *int, li
 }
 
 func (s *Service) ListItemSummariesPage(ctx context.Context, userID int, cursor *int, limit int) (SummaryPage, error) {
+	if limit < 1 || limit == math.MaxInt || (cursor != nil && *cursor < 0) {
+		return SummaryPage{}, errors.New("invalid item pagination")
+	}
 	items, err := s.items.ListSummaryPage(ctx, userID, cursor, limit+1)
 	if err != nil {
 		return SummaryPage{}, err

@@ -163,7 +163,7 @@ func newHandler(configuration config.Config, database *sql.DB) http.Handler {
 	v2.HandleFunc("/feeds", authenticate(libraryHandler.HandleCreateFeed)).Methods(http.MethodPost)
 	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleGetFeed)).Methods(http.MethodGet)
 	v2.HandleFunc("/feeds/{id}", authenticate(libraryHandler.HandleDeleteFeedByID)).Methods(http.MethodDelete)
-	v2.HandleFunc("/items", authenticate(libraryHandler.HandleGetItems)).Methods(http.MethodGet)
+	v2.HandleFunc("/items", authenticate(libraryHandler.HandleGetResourceItems)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/sync", authenticate(syncHandler.HandleItems)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/changes", authenticate(syncHandler.HandleChanges)).Methods(http.MethodGet)
 	v2.HandleFunc("/items/{id}", authenticate(libraryHandler.HandleGetItemByPathID)).Methods(http.MethodGet)

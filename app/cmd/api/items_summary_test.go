@@ -84,7 +84,7 @@ func TestSwaggerItemListViews(t *testing.T) {
 		Paths map[string]map[string]struct {
 			Parameters []struct {
 				Name    string   `json:"name"`
-				Default string   `json:"default"`
+				Default any      `json:"default"`
 				Enum    []string `json:"enum"`
 			} `json:"parameters"`
 		} `json:"paths"`
